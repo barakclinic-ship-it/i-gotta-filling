@@ -307,11 +307,11 @@
 </div>
 
 <div id="workspace">
-  <p id="hint">לחיצה ארוכה בכל מקום על העמוד פותחת תפריט</p>
+  <p id="hint"><span id="hintText">לחיצה ארוכה בכל מקום על העמוד פותחת תפריט</span></p>
   <div id="firstUseToast" style="display:none;position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:150;background:rgba(24,24,24,0.92);color:#fff;padding:14px 22px;border-radius:16px;font-size:13px;text-align:center;box-shadow:0 8px 26px rgba(0,0,0,0.25);max-width:80vw;">
     <div style="display:flex;align-items:center;justify-content:center;gap:10px;">
       <span id="toastRing" style="width:16px;height:16px;border-radius:50%;border:2px solid #fff;flex-shrink:0;"></span>
-      <span>לחיצה ארוכה בכל מקום על העמוד פותחת תפריט</span>
+      <span id="toastText">לחיצה ארוכה בכל מקום על העמוד פותחת תפריט</span>
     </div>
   </div>
   <div id="canvasOuter">
@@ -947,11 +947,14 @@ window.addEventListener('pointerup', (e) => { activePointers.delete(e.pointerId)
 window.addEventListener('pointercancel', (e) => { activePointers.delete(e.pointerId); }, true);
 
 let isPanning = false, panStartX0 = 0, panStartY0 = 0;
+const isDesktopPointer = window.matchMedia('(pointer:fine) and (hover:hover)').matches;
 
 overlay.addEventListener('pointerdown', (e) => {
   if(e.target !== overlay) return;
+  if(isDesktopPointer && e.button === 2) return; // right-click is handled by the contextmenu listener below
   deselectAllFields();
   if(activePointers.size > 1) return; // a second finger is already down - this is a pinch, not a press
+  if(isDesktopPointer) return; // on desktop, only right-click opens the menu - long-press-by-holding-the-mouse was unreliable
 
   isPanning = false;
   pressStart = {x:e.clientX, y:e.clientY};
@@ -993,7 +996,13 @@ function endPan(){
 }
 overlay.addEventListener('pointerup', endPan);
 overlay.addEventListener('pointercancel', endPan);
-overlay.addEventListener('contextmenu', (e) => e.preventDefault());
+overlay.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  if(!isDesktopPointer) return;
+  deselectAllFields();
+  const rect = overlay.getBoundingClientRect();
+  showRadialMenu(e.clientX - rect.left, e.clientY - rect.top);
+});
 
 /* ---- pinch-to-zoom: tracks the fingers exactly (scale + position together), no separate
    "commit" step, so there is nothing that can jump or snap back ---- */
@@ -1574,7 +1583,7 @@ document.body.addEventListener('drop', async (e) => {
 
 const HELP_ITEMS = [
   {icon:'docAdd', text:'מעלים PDF או תמונה - אפשר גם רק למזג כמה קבצים לקובץ אחד, בלי למלא כלום'},
-  {icon:'text',   text:'לחיצה ארוכה בכל מקום בעמוד פותחת תפריט: טקסט, מספר, תאריך, תמונה, חתימה וישור שורות'},
+  {icon:'text',   text:(isDesktopPointer ? 'לחיצה ימנית בכל מקום בעמוד פותחת תפריט' : 'לחיצה ארוכה בכל מקום בעמוד פותחת תפריט') + ': טקסט, מספר, תאריך, תמונה, חתימה וישור שורות'},
   {icon:'number', text:'מספר - נפתחת מקלדת ספרות עם סמלי מטבע ופיסוק מהירים (₪ $ € % / - וכו\')'},
   {icon:'date',   text:'תאריך - ממולא אוטומטית בתאריך היום, ואפשר גם לבחור תאריך מהיומן'},
   {icon:'sig',    text:'חתימה - חותמים באצבע בתוך החלון'},
@@ -1606,6 +1615,10 @@ buildHelpList();
 setIcon(document.getElementById('btnCloseHelp'), 'check');
 document.getElementById('btnHelp').onclick = () => { document.getElementById('helpModalBg').style.display = 'flex'; };
 document.getElementById('btnCloseHelp').onclick = () => { document.getElementById('helpModalBg').style.display = 'none'; };
+
+const longPressWording = isDesktopPointer ? 'לחיצה ימנית בכל מקום על העמוד פותחת תפריט' : 'לחיצה ארוכה בכל מקום על העמוד פותחת תפריט';
+document.getElementById('hintText').textContent = longPressWording;
+document.getElementById('toastText').textContent = longPressWording;
 
 tryRestoreState();
 </script>
