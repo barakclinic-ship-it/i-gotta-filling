@@ -154,7 +154,8 @@
   .radial-option svg{width:18px;height:18px;stroke:var(--ink);fill:none;stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round;}
   .radial-option:hover{background:#fff;}
   .radial-option span.lbl{
-    position:absolute;bottom:-17px;font-size:9.5px;color:var(--muted);white-space:nowrap;letter-spacing:.02em;
+    position:absolute;top:-18px;left:50%;transform:translateX(-50%);
+    font-size:9.5px;color:var(--muted);white-space:nowrap;letter-spacing:.02em;
   }
   @keyframes pop{from{transform:scale(0.4);opacity:0;}to{transform:scale(1);opacity:1;}}
 
@@ -1041,6 +1042,9 @@ function unlockZoom(){
 
 function showRadialMenu(x, y){
   removeRadialMenu();
+  const overlayRect = overlay.getBoundingClientRect();
+  const margin = 100; // keep the fan's outer balloons from being clipped by the screen edges
+  x = Math.max(margin, Math.min(x, overlayRect.width - margin));
   const flipDown = y < 120;
 
   const menu = document.createElement('div');
