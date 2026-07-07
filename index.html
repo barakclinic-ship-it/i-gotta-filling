@@ -434,7 +434,7 @@ let pdfDoc = null;
 let pdfBytes = null;
 let currentPage = 1;
 let totalPages = 1;
-let renderScale = 1.5;
+let renderScale = 2;
 let zoomScale = 1, panX = 0, panY = 0; // document zoom+pan state, applied purely via CSS transform
 let fields = {};
 let fieldIdCounter = 0;
@@ -508,7 +508,7 @@ async function tryRestoreState(){
     fields = saved.fields || {};
     for(let i=1;i<=totalPages;i++){ if(!fields[i]) fields[i] = []; }
     currentPage = Math.min(saved.currentPage || 1, totalPages);
-    renderScale = saved.renderScale || 1.5;
+    renderScale = saved.renderScale || 2;
     zoomScale = saved.zoomScale || 1;
     panX = saved.panX || 0;
     panY = saved.panY || 0;
@@ -1090,7 +1090,8 @@ function showRadialMenu(x, y){
   menu.style.left = x + 'px';
   menu.style.top = y + 'px';
   menu.style.transformOrigin = '0 0';
-  menu.style.transform = `scale(${1/getViewportScale()})`;
+  const invScale = Math.max(0.4, Math.min(2.5, 1/getViewportScale()));
+  menu.style.transform = `scale(${invScale})`;
 
   const center = document.createElement('div');
   center.className = 'radial-center';
@@ -1131,6 +1132,7 @@ function showRadialMenu(x, y){
     lbl.innerText = o.label;
     const bias = i - (opts.length - 1) / 2; // negative for left-side options, positive for right-side, ~0 near the middle
     lbl.style.transform = `translateX(calc(-50% + ${bias * 7}px))`;
+    if(flipDown){ lbl.style.top = 'auto'; lbl.style.bottom = '-18px'; }
     opt.appendChild(lbl);
     opt.addEventListener('click', (ev) => {
       ev.stopPropagation();
