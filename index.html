@@ -361,7 +361,7 @@
       <input id="numberInputField" type="text" inputmode="decimal" placeholder="0">
     </div>
     <div id="dateInputWrap" style="display:none;">
-      <input id="dateInputField" type="text" placeholder="05/07/2026">
+      <input id="dateInputField" type="text" inputmode="numeric" placeholder="05/07/2026">
       <div style="display:flex;gap:14px;justify-content:center;margin-top:14px;">
         <button class="circle" id="btnOpenDatePicker" title="בחר מיומן"></button>
       </div>
@@ -1165,8 +1165,8 @@ function showRadialMenu(x, y){
   center.addEventListener('pointermove', (ev) => {
     if(!dragCenterStart) return;
     ev.stopPropagation();
-    const dxDrag = (ev.clientX - dragCenterStart.x) / invScale;
-    const dyDrag = (ev.clientY - dragCenterStart.y) / invScale;
+    const dxDrag = (ev.clientX - dragCenterStart.x) / zoomScale;
+    const dyDrag = (ev.clientY - dragCenterStart.y) / zoomScale;
     menuX = menuStartX + dxDrag;
     menuY = menuStartY + dyDrag;
     menu.style.left = menuX + 'px';
@@ -1230,6 +1230,23 @@ const numberInputWrap = document.getElementById('numberInputWrap');
 const numberInputField = document.getElementById('numberInputField');
 const dateInputWrap = document.getElementById('dateInputWrap');
 const dateInputField = document.getElementById('dateInputField');
+
+function maskDateValue(raw){
+  const digits = raw.replace(/\D/g, '').slice(0, 8); // DDMMYYYY, digits only
+  let out = digits.slice(0, 2);
+  if(digits.length >= 3) out += '/' + digits.slice(2, 4);
+  if(digits.length >= 5) out += '/' + digits.slice(4, 8);
+  return out;
+}
+dateInputField.addEventListener('input', () => {
+  const pos = dateInputField.selectionStart;
+  const before = dateInputField.value;
+  dateInputField.value = maskDateValue(before);
+  // keep the cursor roughly where it was, accounting for any slash just inserted
+  const diff = dateInputField.value.length - before.length;
+  const newPos = Math.max(0, (pos || 0) + diff);
+  try{ dateInputField.setSelectionRange(newPos, newPos); }catch(err){}
+});
 const nativeDatePicker = document.getElementById('nativeDatePicker');
 let textModalMode = 'text';
 
@@ -1410,8 +1427,45 @@ document.getElementById('btnCancelSig').onclick = () => { modalBg.style.display 
 document.getElementById('btnClearSig').onclick = () => sigCtx.clearRect(0,0,sigCanvas.width,sigCanvas.height);
 
 function sigPos(e){ const rect = sigCanvas.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return {x:t.clientX-rect.left, y:t.clientY-rect.top}; }
-sigCanvas.addEventListener('pointerdown', (e) => { sigDrawing = true; const p = sigPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); });
-sigCanvas.addEventListener('pointermove', (e) => { if(!sigDrawing) return; const p = sigPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); });
+
+let sigLastX = 0, sigLastY = 0, sigMidX = 0, sigMidY = 0, sigLastT = 0;
+
+sigCanvas.addEventListener('pointerdown', (e) => {
+  sigDrawing = true;
+  const p = sigPos(e);
+  sigLastX = p.x; sigLastY = p.y;
+  sigMidX = p.x; sigMidY = p.y;
+  sigLastT = performance.now();
+  sigCtx.lineJoin = 'round';
+  sigCtx.lineWidth = 2;
+  // a tiny dot so a single tap/click still leaves a visible mark
+  sigCtx.beginPath();
+  sigCtx.arc(p.x, p.y, 1, 0, Math.PI*2);
+  sigCtx.fillStyle = sigCtx.strokeStyle;
+  sigCtx.fill();
+});
+sigCanvas.addEventListener('pointermove', (e) => {
+  if(!sigDrawing) return;
+  const p = sigPos(e);
+  const now = performance.now();
+  const dt = Math.max(1, now - sigLastT);
+  const dist = Math.hypot(p.x - sigLastX, p.y - sigLastY);
+  const speed = dist / dt; // px per ms - faster strokes read thinner, slower reads thicker, like a real nib
+  const targetWidth = Math.max(1.1, Math.min(3.4, 2.8 - speed * 10));
+
+  const newMidX = (sigLastX + p.x) / 2;
+  const newMidY = (sigLastY + p.y) / 2;
+
+  sigCtx.lineWidth = sigCtx.lineWidth * 0.7 + targetWidth * 0.3; // smooth out width changes too, avoids jitter
+  sigCtx.beginPath();
+  sigCtx.moveTo(sigMidX, sigMidY);
+  sigCtx.quadraticCurveTo(sigLastX, sigLastY, newMidX, newMidY);
+  sigCtx.stroke();
+
+  sigMidX = newMidX; sigMidY = newMidY;
+  sigLastX = p.x; sigLastY = p.y;
+  sigLastT = now;
+});
 window.addEventListener('pointerup', () => sigDrawing = false);
 
 document.getElementById('btnConfirmSig').onclick = () => {
