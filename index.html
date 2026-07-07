@@ -146,7 +146,7 @@
   .img-field img, .sig-field img{width:100%;height:100%;display:block;pointer-events:none;object-fit:contain;}
 
   .radial-menu{position:absolute;left:0;top:0;width:0;height:0;z-index:60;}
-  .radial-center{position:absolute;left:-9px;top:-9px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;opacity:.8;cursor:move;touch-action:none;}
+  .radial-center{position:absolute;left:-9px;top:-9px;width:18px;height:18px;border-radius:50%;background:#d9433f;opacity:.85;cursor:move;touch-action:none;}
   .radial-center::before{content:'';position:absolute;left:-10px;top:-10px;width:32px;height:32px;border-radius:50%;}
   .radial-line{position:absolute;left:0;top:0;height:1px;background:var(--ink);transform-origin:0 50%;opacity:.28;}
   .radial-option{
@@ -1103,7 +1103,6 @@ function showRadialMenu(x, y){
 
   const center = document.createElement('div');
   center.className = 'radial-center';
-  center.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 21s-7-4.35-9.5-8.8C1 9 2.5 5.7 6 5.7c2 0 3.6 1.15 4 2.3.4-1.15 2-2.3 4-2.3 3.5 0 5 3.3 3.5 6.5C19 16.65 12 21 12 21z" fill="#181818"/></svg>';
   menu.appendChild(center);
 
   const opts = [
