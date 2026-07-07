@@ -660,7 +660,8 @@ mergeFileInput.onchange = async (e) => {
 
 async function renderPage(num){
   const page = await pdfDoc.getPage(num);
-  const viewport = page.getViewport({scale: renderScale});
+  const dpr = window.devicePixelRatio || 1;
+  const viewport = page.getViewport({scale: renderScale * dpr});
   canvas.width = viewport.width;
   canvas.height = viewport.height;
   await page.render({canvasContext: ctx, viewport}).promise;
@@ -1097,14 +1098,16 @@ function showRadialMenu(x, y){
 
   overlay.appendChild(menu);
   currentRadialMenu = menu;
+  let ignoreNextClick = true; // the click that ends this same long-press/mouse-hold gesture shouldn't close the menu
 
-  setTimeout(() => {
-    document.addEventListener('click', function closeOnce(ev){
-      if(currentRadialMenu && !currentRadialMenu.contains(ev.target)){
-        removeRadialMenu();
-      }
-    }, {once:true});
-  }, 0);
+  function closeOnce(ev){
+    if(ignoreNextClick){ ignoreNextClick = false; return; }
+    if(currentRadialMenu && !currentRadialMenu.contains(ev.target)){
+      removeRadialMenu();
+      document.removeEventListener('click', closeOnce);
+    }
+  }
+  setTimeout(() => { document.addEventListener('click', closeOnce); }, 0);
 }
 
 function clickToPct(x, y, wPct, hPct){
