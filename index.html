@@ -146,7 +146,7 @@
   .img-field img, .sig-field img{width:100%;height:100%;display:block;pointer-events:none;object-fit:contain;}
 
   .radial-menu{position:absolute;left:0;top:0;width:0;height:0;z-index:60;}
-  .radial-center{position:absolute;left:-6px;top:-6px;width:12px;height:12px;border-radius:50%;background:var(--ink);opacity:.55;cursor:move;touch-action:none;}
+  .radial-center{position:absolute;left:-9px;top:-9px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;opacity:.8;cursor:move;touch-action:none;}
   .radial-center::before{content:'';position:absolute;left:-10px;top:-10px;width:32px;height:32px;border-radius:50%;}
   .radial-line{position:absolute;left:0;top:0;height:1px;background:var(--ink);transform-origin:0 50%;opacity:.28;}
   .radial-option{
@@ -966,7 +966,7 @@ overlay.addEventListener('pointerdown', (e) => {
   pressStart = {x:e.clientX, y:e.clientY};
   panStartX0 = panX; panStartY0 = panY;
   const rect = overlay.getBoundingClientRect();
-  const lx = e.clientX-rect.left, ly = e.clientY-rect.top;
+  const lx = (e.clientX-rect.left) / zoomScale, ly = (e.clientY-rect.top) / zoomScale;
   pressRing = document.createElement('div');
   pressRing.className = 'press-ring';
   pressRing.style.left = lx+'px';
@@ -1007,7 +1007,7 @@ overlay.addEventListener('contextmenu', (e) => {
   if(!isDesktopPointer) return;
   deselectAllFields();
   const rect = overlay.getBoundingClientRect();
-  showRadialMenu(e.clientX - rect.left, e.clientY - rect.top);
+  showRadialMenu((e.clientX - rect.left) / zoomScale, (e.clientY - rect.top) / zoomScale);
 });
 
 /* ---- pinch-to-zoom: tracks the fingers exactly (scale + position together), no separate
@@ -1086,10 +1086,10 @@ function unlockZoom(){
 
 function showRadialMenu(x, y){
   removeRadialMenu();
-  const overlayRect = overlay.getBoundingClientRect();
-  const margin = 100; // keep the fan's outer balloons from being clipped by the screen edges
-  x = Math.max(margin, Math.min(x, overlayRect.width - margin));
-  const flipDown = y < 120;
+  const naturalW = canvas.offsetWidth;
+  const margin = 100 / zoomScale; // keep the fan's outer balloons from being clipped by the screen edges
+  x = Math.max(margin, Math.min(x, naturalW - margin));
+  const flipDown = y < (120 / zoomScale);
 
   const menu = document.createElement('div');
   menu.className = 'radial-menu';
@@ -1103,6 +1103,7 @@ function showRadialMenu(x, y){
 
   const center = document.createElement('div');
   center.className = 'radial-center';
+  center.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 21s-7-4.35-9.5-8.8C1 9 2.5 5.7 6 5.7c2 0 3.6 1.15 4 2.3.4-1.15 2-2.3 4-2.3 3.5 0 5 3.3 3.5 6.5C19 16.65 12 21 12 21z" fill="#181818"/></svg>';
   menu.appendChild(center);
 
   const opts = [
@@ -1191,9 +1192,9 @@ function showRadialMenu(x, y){
 }
 
 function clickToPct(x, y, wPct, hPct){
-  const rect = overlay.getBoundingClientRect();
-  let xPct = (x/rect.width*100) - wPct/2;
-  let yPct = (y/rect.height*100) - hPct/2;
+  const naturalW = canvas.offsetWidth, naturalH = canvas.offsetHeight;
+  let xPct = (x/naturalW*100) - wPct/2;
+  let yPct = (y/naturalH*100) - hPct/2;
   xPct = Math.max(0, Math.min(xPct, 100-wPct));
   yPct = Math.max(0, Math.min(yPct, 100-hPct));
   return {xPct, yPct, wPct, hPct};
