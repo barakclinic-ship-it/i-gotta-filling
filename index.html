@@ -1086,7 +1086,7 @@ function unlockZoom(){
 function showRadialMenu(x, y){
   removeRadialMenu();
   const naturalW = canvas.offsetWidth;
-  const margin = 100 / zoomScale; // keep the fan's outer balloons from being clipped by the screen edges
+  const margin = 30 / zoomScale; // just enough that the center dot itself isn't literally on the edge
   x = Math.max(margin, Math.min(x, naturalW - margin));
   const flipDown = y < (120 / zoomScale);
 
