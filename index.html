@@ -1077,11 +1077,10 @@ function getViewportScale(){
 const viewportMetaEl = document.querySelector('meta[name=viewport]');
 const baseViewportContent = viewportMetaEl.getAttribute('content');
 function lockZoom(){
-  viewportMetaEl.setAttribute('content', baseViewportContent + ', maximum-scale=1, user-scalable=no');
-  window.scrollTo(0,0);
+  // native pinch-zoom is already permanently disabled via the viewport meta tag,
+  // so there's nothing left to lock here - kept as a no-op so existing call sites stay valid
 }
 function unlockZoom(){
-  viewportMetaEl.setAttribute('content', baseViewportContent);
 }
 
 function showRadialMenu(x, y){
