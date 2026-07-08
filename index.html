@@ -755,7 +755,7 @@ function renderFieldsForPage(num){
   (fields[num] || []).forEach(f => renderFieldElement(f));
 }
 
-function renderFieldElement(f, startSelected){
+function renderFieldElement(f, startSelected, recenter){
   const div = document.createElement('div');
   div.className = 'field ' + (f.type === 'sig' ? 'sig-field' : (f.type === 'image' ? 'img-field' : 'text-field'));
   if(startSelected) div.classList.add('selected');
@@ -804,14 +804,25 @@ function renderFieldElement(f, startSelected){
   overlay.appendChild(div);
 
   if(f.type === 'text'){
-    requestAnimationFrame(() => measureTextBox(f, div));
+    requestAnimationFrame(() => measureTextBox(f, div, recenter));
   }
 }
 
-function measureTextBox(f, div){
-  const oRect = overlay.getBoundingClientRect();
-  if(oRect.width > 0) f.wPct = (div.offsetWidth / oRect.width) * 100;
-  if(oRect.height > 0) f.hPct = (div.offsetHeight / oRect.height) * 100;
+function measureTextBox(f, div, recenter){
+  const naturalW = canvas.offsetWidth, naturalH = canvas.offsetHeight;
+  if(naturalW > 0) f.wPct = (div.offsetWidth / naturalW) * 100;
+  if(naturalH > 0) f.hPct = (div.offsetHeight / naturalH) * 100;
+  if(recenter){
+    // now that we know the real size, re-center the box on the point that was actually tapped,
+    // instead of leaving it anchored where a guessed (usually wrong) initial width placed it
+    let xPct = recenter.cx - f.wPct / 2;
+    let yPct = recenter.cy - f.hPct / 2;
+    xPct = Math.max(0, Math.min(xPct, 100 - f.wPct));
+    yPct = Math.max(0, Math.min(yPct, 100 - f.hPct));
+    f.xPct = xPct; f.yPct = yPct;
+    div.style.left = xPct + '%';
+    div.style.top = yPct + '%';
+  }
 }
 
 function deselectAllFields(){
@@ -1378,7 +1389,9 @@ document.getElementById('btnConfirmText').onclick = () => {
     const p = pendingTextPos;
     const f = { id:'f'+(fieldIdCounter++), type:'text', xPct:p.xPct, yPct:p.yPct, wPct:p.wPct, text:val, color:selectedTextColor, fontSize:currentFontSize, inputMode:textModalMode };
     fields[currentPage].push(f);
-    renderFieldElement(f, true);
+    const centerXPct = p.xPct + p.wPct / 2;
+    const centerYPct = p.yPct + p.hPct / 2;
+    renderFieldElement(f, true, {cx: centerXPct, cy: centerYPct});
   }
   textModalBg.style.display = 'none';
   unlockZoom();
