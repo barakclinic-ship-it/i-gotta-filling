@@ -76,6 +76,10 @@
     display:flex;align-items:center;flex-shrink:0;
     margin-inline-start:8px;opacity:.85;
   }
+  #headerMotto{
+    font-size:10.5px;font-weight:300;color:var(--muted);letter-spacing:.03em;
+    white-space:nowrap;font-style:italic;
+  }
   .sep{width:1px;height:20px;background:rgba(24,24,24,0.12);margin:0 1px;flex-shrink:0;}
 
   #pageNavBar{
@@ -285,16 +289,17 @@
 <body>
 
 <header id="mainToolbar" style="display:none;">
-  <div id="headerButtons" style="display:flex;align-items:center;gap:5px;flex:1;justify-content:center;min-width:0;">
+  <div id="headerButtons" style="display:flex;align-items:center;gap:5px;flex:1;justify-content:flex-start;min-width:0;">
     <button class="circle hdr" id="btnHome" title="בית"></button>
     <div class="sep"></div>
     <button class="circle hdr" id="btnExport" title="שמור והורד"></button>
     <button class="circle hdr" id="btnShare" title="שלח"></button>
-    <div class="sep"></div>
+    <div class="sep" id="zoomSep"></div>
     <button class="circle hdr" id="btnZoomOut" title="הקטן"></button>
     <button class="circle hdr" id="btnZoomIn" title="הגדל"></button>
   </div>
-  <div id="headerLogo" title="חזרה לדף הבית" style="cursor:pointer;">
+  <div id="headerLogo" title="חזרה לדף הבית" style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+    <span id="headerMotto">I Gotta Filling</span>
     <svg viewBox="0 0 24 24" width="24" height="24">
       <path d="M7 3h7l4 4v14H7z" fill="none" stroke="#181818" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
       <path d="M14 3v4h4" fill="none" stroke="#181818" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -346,7 +351,7 @@
 
   <button class="circle" id="btnHelp" style="margin-top:26px;font-size:20px;font-weight:600;width:50px;height:50px;background:var(--ink);color:#fff;border-color:var(--ink);animation:helpBounce 2.2s ease-in-out infinite;" title="איך זה עובד">?</button>
 
-  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.6<br>© כל הזכויות שמורות ל-Barak Hadad</p>
+  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.9<br>© כל הזכויות שמורות ל-Barak Hadad</p>
 </div>
 
 <div id="workspace">
@@ -1007,6 +1012,11 @@ window.addEventListener('pointerup', (e) => { activePointers.delete(e.pointerId)
 window.addEventListener('pointercancel', (e) => { activePointers.delete(e.pointerId); }, true);
 
 const isDesktopPointer = window.matchMedia('(pointer:fine) and (hover:hover)').matches;
+if(!isDesktopPointer){
+  document.getElementById('zoomSep').style.display = 'none';
+  document.getElementById('btnZoomOut').style.display = 'none';
+  document.getElementById('btnZoomIn').style.display = 'none';
+}
 
 overlay.addEventListener('pointerdown', (e) => {
   if(e.target !== overlay) return;
