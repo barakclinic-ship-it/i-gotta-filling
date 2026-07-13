@@ -423,7 +423,7 @@
 
   <button class="circle" id="btnHelp" style="margin-top:26px;font-size:20px;font-weight:600;width:50px;height:50px;background:var(--ink);color:#fff;border-color:var(--ink);animation:helpBounce 2.2s ease-in-out infinite;" title="איך זה עובד">?</button>
 
-  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.28<br>© כל הזכויות שמורות ל-Barak Hadad</p>
+  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.32<br>© כל הזכויות שמורות ל-Barak Hadad</p>
 </div>
 
 <div id="workspace">
@@ -1778,6 +1778,7 @@ sigCanvas.addEventListener('pointerdown', (e) => {
   sigMidX = p.x; sigMidY = p.y;
   sigLastT = performance.now();
   sigCtx.lineJoin = 'round';
+  sigCtx.lineCap = 'round';
   sigCtx.lineWidth = 2 * sigWidthScale;
   // a tiny dot so a single tap/click still leaves a visible mark
   sigCtx.beginPath();
@@ -1807,28 +1808,39 @@ sigCanvas.addEventListener('pointermove', (e) => {
   sigLastX = p.x; sigLastY = p.y;
   sigLastT = now;
 });
-function drawSigTaper(){
-  const dx = sigLastX - sigMidX, dy = sigLastY - sigMidY;
-  const len = Math.hypot(dx, dy);
-  if(len < 0.4) return; // just a tap/dot, nothing to taper
-  const ux = dx / len, uy = dy / len;
-  const steps = 6;
-  let x = sigLastX, y = sigLastY;
-  const baseWidth = sigCtx.lineWidth;
+// Draws a smooth end-of-stroke taper: full width/opacity where the pen was, fading to a thin,
+// transparent point as it continues along the stroke's direction - like a pen lifting off the page.
+// Built from many tiny flat-capped strokes so it stays smooth regardless of canvas scale.
+function drawSigFadeTaper(baseX, baseY, dirX, dirY, baseWidth){
+  const len = Math.hypot(dirX, dirY);
+  if(len < 0.001) return;
+  const ux = dirX/len, uy = dirY/len;
+  const steps = 18;
+  const taperLen = Math.max(14, baseWidth * 8);
+  const stepLen = taperLen / steps;
+  const prevCap = sigCtx.lineCap;
   sigCtx.lineCap = 'round';
+  let x = baseX, y = baseY;
   for(let i = 1; i <= steps; i++){
     const t = i / steps;
-    const segLen = 2.6 * (1 - t * 0.25);
-    const nx = x + ux * segLen, ny = y + uy * segLen;
+    const nx = x + ux * stepLen, ny = y + uy * stepLen;
     sigCtx.beginPath();
     sigCtx.moveTo(x, y);
     sigCtx.lineTo(nx, ny);
-    sigCtx.lineWidth = Math.max(0.15, baseWidth * (1 - t * 0.88));
-    sigCtx.globalAlpha = Math.max(0, 1 - t * 0.95);
+    sigCtx.lineWidth = Math.max(0.1, baseWidth * 0.85 * (1 - t));
+    sigCtx.globalAlpha = Math.max(0, 1 - t);
     sigCtx.stroke();
     x = nx; y = ny;
   }
   sigCtx.globalAlpha = 1;
+  sigCtx.lineCap = prevCap;
+}
+
+function drawSigTaper(){
+  const dx = sigLastX - sigMidX, dy = sigLastY - sigMidY;
+  const len = Math.hypot(dx, dy);
+  if(len < 0.4) return; // just a tap/dot, nothing to taper
+  drawSigFadeTaper(sigLastX, sigLastY, dx, dy, sigCtx.lineWidth);
 }
 window.addEventListener('pointerup', () => {
   if(sigDrawing){ drawSigTaper(); }
