@@ -80,6 +80,24 @@
     box-shadow:0 8px 24px rgba(0,0,0,0.3);
     z-index:20;
   }
+  .sigTopRow{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:10px;}
+  .sigTopRow .paletteRow{margin:0;}
+  #sigThicknessPanel{
+    position:fixed;
+    background:rgba(30,30,30,0.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    border-radius:14px;padding:10px;
+    display:flex;flex-direction:column;gap:8px;
+    width:max-content;max-width:60vw;
+    box-shadow:0 8px 24px rgba(0,0,0,0.3);
+    z-index:400;
+  }
+  .thicknessOption{
+    display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:8px;cursor:pointer;
+    background:rgba(255,255,255,0.06);
+  }
+  .thicknessOption.selected{background:rgba(255,255,255,0.18);}
+  .thicknessOption .swatchLine{width:44px;height:2px;background:#fff;border-radius:2px;}
+  .thicknessOption span{color:rgba(255,255,255,0.85);font-size:12px;}
   .circle.small svg{width:9px;height:9px;stroke-width:1.3;}
   .circle.big{width:56px;height:56px;}
   .circle.big svg{width:22px;height:22px;}
@@ -405,7 +423,7 @@
 
   <button class="circle" id="btnHelp" style="margin-top:26px;font-size:20px;font-weight:600;width:50px;height:50px;background:var(--ink);color:#fff;border-color:var(--ink);animation:helpBounce 2.2s ease-in-out infinite;" title="איך זה עובד">?</button>
 
-  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.21<br>© כל הזכויות שמורות ל-Barak Hadad</p>
+  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.28<br>© כל הזכויות שמורות ל-Barak Hadad</p>
 </div>
 
 <div id="workspace">
@@ -430,6 +448,15 @@
 <div class="modal-bg" id="modalBg">
   <div class="modal-box">
     <h2>חתימה</h2>
+    <div class="sigTopRow">
+      <div class="paletteRow" id="sigColorRow"></div>
+      <div style="position:relative;">
+        <button class="circle" id="btnToggleThickness" title="עובי קו">
+          <svg viewBox="0 0 24 24"><line x1="4" y1="12" x2="20" y2="12" stroke-width="3"/></svg>
+        </button>
+        <div id="sigThicknessPanel" style="display:none;"></div>
+      </div>
+    </div>
     <canvas id="sigCanvas"></canvas>
     <div class="modalActions">
       <button class="circle" id="btnClearSig" title="נקה"></button>
@@ -550,10 +577,10 @@ let pendingSigPos = null;
 let pendingImagePos = null;
 let pendingTextPos = null;
 let editingTextField = null;
-let selectedTextColor = '#000000';
+let selectedTextColor = '#1a46c9';
 let currentFontSize = 12;
 let lastUsedFontSize = 12; // new text fields start at whatever size was last used
-let lastUsedColor = '#000000'; // new text fields start at whatever color was last used
+let lastUsedColor = '#1a46c9'; // new text fields start at whatever color was last used
 let currentRadialMenu = null;
 let sourceDocs = []; // [{name, startPage, endPage}] - tracks which pages came from which original file
 
@@ -618,7 +645,7 @@ async function tryRestoreState(){
     currentPage = Math.min(saved.currentPage || 1, totalPages);
     docZoom = saved.docZoom || 1;
     lastUsedFontSize = saved.lastUsedFontSize || 12;
-    lastUsedColor = saved.lastUsedColor || '#000000';
+    lastUsedColor = saved.lastUsedColor || '#1a46c9';
     sourceDocs = (saved.sourceDocs && saved.sourceDocs.length) ? saved.sourceDocs : [{name:'document.pdf', startPage:1, endPage: totalPages}];
     showWorkspace();
     await renderPage(currentPage);
@@ -893,6 +920,7 @@ function renderFieldElement(f, startSelected, recenter){
     const img = document.createElement('img');
     img.src = f.dataUrl;
     div.appendChild(img);
+    if(f.type === 'sig'){ onTap = () => openSigModal(f); }
   } else {
     div.innerText = f.text || '';
     div.style.color = f.color || '#000000';
@@ -1304,7 +1332,6 @@ function showRadialMenu(x, y){
     {type:'date',   icon:'date',   label:'תאריך'},
     {type:'image',  icon:'image',  label:'תמונה'},
     {type:'sig',    icon:'sig',    label:'חתימה'},
-    {type:'align',  icon:'align',  label:'ישר'},
   ];
   const radius = 88;
   const spanStart = -165, spanEnd = -15; // fan spread across the upper arc
@@ -1626,8 +1653,108 @@ const modalBg = document.getElementById('modalBg');
 const sigCanvas = document.getElementById('sigCanvas');
 const sigCtx = sigCanvas.getContext('2d');
 let sigDrawing = false;
+let lastUsedSigColor = '#1a46c9';
+let selectedSigColor = lastUsedSigColor;
+const sigColorRow = document.getElementById('sigColorRow');
 
-function openSigModal(){ lockZoom(); modalBg.style.display = 'flex'; setTimeout(resizeSigCanvas, 50); }
+function recolorSignature(newColor){
+  // preserves the ink's shape and anti-aliased edges, just swaps its color
+  sigCtx.globalCompositeOperation = 'source-in';
+  sigCtx.fillStyle = newColor;
+  sigCtx.fillRect(0, 0, sigCanvas.width, sigCanvas.height);
+  sigCtx.globalCompositeOperation = 'source-over';
+}
+
+function renderSigColorRow(){
+  sigColorRow.innerHTML = '';
+  COLORS.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'swatch' + (c === selectedSigColor ? ' selected' : '');
+    sw.style.background = c;
+    sw.onclick = () => {
+      selectedSigColor = c;
+      lastUsedSigColor = c;
+      recolorSignature(c);
+      sigCtx.strokeStyle = c;
+      renderSigColorRow();
+    };
+    sigColorRow.appendChild(sw);
+  });
+}
+
+let editingSigField = null;
+let sigWidthScale = 1;
+const THICKNESS_PRESETS = [
+  {scale:0.55, label:'דק'},
+  {scale:1,    label:'רגיל'},
+  {scale:1.7,  label:'עבה'},
+  {scale:2.6,  label:'עבה מאוד'},
+];
+const sigThicknessPanel = document.getElementById('sigThicknessPanel');
+const btnToggleThickness = document.getElementById('btnToggleThickness');
+
+function renderThicknessPanel(){
+  sigThicknessPanel.innerHTML = '';
+  THICKNESS_PRESETS.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'thicknessOption' + (t.scale === sigWidthScale ? ' selected' : '');
+    const line = document.createElement('div');
+    line.className = 'swatchLine';
+    line.style.height = Math.max(1.5, t.scale * 2) + 'px';
+    const label = document.createElement('span');
+    label.textContent = t.label;
+    row.appendChild(line);
+    row.appendChild(label);
+    row.onclick = (e) => {
+      e.stopPropagation();
+      sigWidthScale = t.scale;
+      renderThicknessPanel();
+      sigThicknessPanel.style.display = 'none';
+    };
+    sigThicknessPanel.appendChild(row);
+  });
+}
+renderThicknessPanel();
+btnToggleThickness.onclick = (e) => {
+  e.stopPropagation();
+  const isOpen = sigThicknessPanel.style.display === 'flex';
+  if(isOpen){
+    sigThicknessPanel.style.display = 'none';
+    return;
+  }
+  const rect = btnToggleThickness.getBoundingClientRect();
+  sigThicknessPanel.style.display = 'flex';
+  const panelWidth = sigThicknessPanel.offsetWidth;
+  let left = rect.left + rect.width / 2 - panelWidth / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - panelWidth - 8));
+  sigThicknessPanel.style.left = left + 'px';
+  sigThicknessPanel.style.top = (rect.bottom + 8) + 'px';
+};
+document.addEventListener('click', (e) => {
+  if(sigThicknessPanel.style.display === 'flex' && !sigThicknessPanel.contains(e.target) && e.target !== btnToggleThickness){
+    sigThicknessPanel.style.display = 'none';
+  }
+});
+
+function openSigModal(existingField){
+  lockZoom();
+  modalBg.style.display = 'flex';
+  editingSigField = existingField || null;
+  selectedSigColor = lastUsedSigColor;
+  renderSigColorRow();
+  setTimeout(() => {
+    resizeSigCanvas();
+    if(editingSigField){ loadExistingSigImage(editingSigField.dataUrl); }
+  }, 50);
+}
+function loadExistingSigImage(dataUrl){
+  const img = new Image();
+  img.onload = () => {
+    const w = sigCanvas.width / 2, h = sigCanvas.height / 2;
+    sigCtx.drawImage(img, 0, 0, w, h);
+  };
+  img.src = dataUrl;
+}
 function resizeSigCanvas(){
   const rect = sigCanvas.getBoundingClientRect();
   sigCanvas.width = rect.width * 2;
@@ -1635,9 +1762,9 @@ function resizeSigCanvas(){
   sigCtx.scale(2,2);
   sigCtx.lineWidth = 2;
   sigCtx.lineCap = 'round';
-  sigCtx.strokeStyle = '#181818';
+  sigCtx.strokeStyle = selectedSigColor;
 }
-document.getElementById('btnCancelSig').onclick = () => { modalBg.style.display = 'none'; unlockZoom(); pendingSigPos = null; };
+document.getElementById('btnCancelSig').onclick = () => { modalBg.style.display = 'none'; unlockZoom(); pendingSigPos = null; editingSigField = null; };
 document.getElementById('btnClearSig').onclick = () => sigCtx.clearRect(0,0,sigCanvas.width,sigCanvas.height);
 
 function sigPos(e){ const rect = sigCanvas.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return {x:t.clientX-rect.left, y:t.clientY-rect.top}; }
@@ -1651,10 +1778,10 @@ sigCanvas.addEventListener('pointerdown', (e) => {
   sigMidX = p.x; sigMidY = p.y;
   sigLastT = performance.now();
   sigCtx.lineJoin = 'round';
-  sigCtx.lineWidth = 2;
+  sigCtx.lineWidth = 2 * sigWidthScale;
   // a tiny dot so a single tap/click still leaves a visible mark
   sigCtx.beginPath();
-  sigCtx.arc(p.x, p.y, 1, 0, Math.PI*2);
+  sigCtx.arc(p.x, p.y, 1 * sigWidthScale, 0, Math.PI*2);
   sigCtx.fillStyle = sigCtx.strokeStyle;
   sigCtx.fill();
 });
@@ -1665,7 +1792,7 @@ sigCanvas.addEventListener('pointermove', (e) => {
   const dt = Math.max(1, now - sigLastT);
   const dist = Math.hypot(p.x - sigLastX, p.y - sigLastY);
   const speed = dist / dt; // px per ms - faster strokes read thinner, slower reads thicker, like a real nib
-  const targetWidth = Math.max(1.1, Math.min(3.4, 2.8 - speed * 10));
+  const targetWidth = Math.max(1.1, Math.min(3.4, 2.8 - speed * 10)) * sigWidthScale;
 
   const newMidX = (sigLastX + p.x) / 2;
   const newMidY = (sigLastY + p.y) / 2;
@@ -1680,15 +1807,49 @@ sigCanvas.addEventListener('pointermove', (e) => {
   sigLastX = p.x; sigLastY = p.y;
   sigLastT = now;
 });
-window.addEventListener('pointerup', () => sigDrawing = false);
+function drawSigTaper(){
+  const dx = sigLastX - sigMidX, dy = sigLastY - sigMidY;
+  const len = Math.hypot(dx, dy);
+  if(len < 0.4) return; // just a tap/dot, nothing to taper
+  const ux = dx / len, uy = dy / len;
+  const steps = 6;
+  let x = sigLastX, y = sigLastY;
+  const baseWidth = sigCtx.lineWidth;
+  sigCtx.lineCap = 'round';
+  for(let i = 1; i <= steps; i++){
+    const t = i / steps;
+    const segLen = 2.6 * (1 - t * 0.25);
+    const nx = x + ux * segLen, ny = y + uy * segLen;
+    sigCtx.beginPath();
+    sigCtx.moveTo(x, y);
+    sigCtx.lineTo(nx, ny);
+    sigCtx.lineWidth = Math.max(0.15, baseWidth * (1 - t * 0.88));
+    sigCtx.globalAlpha = Math.max(0, 1 - t * 0.95);
+    sigCtx.stroke();
+    x = nx; y = ny;
+  }
+  sigCtx.globalAlpha = 1;
+}
+window.addEventListener('pointerup', () => {
+  if(sigDrawing){ drawSigTaper(); }
+  sigDrawing = false;
+});
 
 document.getElementById('btnConfirmSig').onclick = () => {
   const dataUrl = sigCanvas.toDataURL('image/png');
-  const p = pendingSigPos || {xPct:35, yPct:70, wPct:30, hPct:10};
-  const f = { id:'f'+(fieldIdCounter++), type:'sig', xPct:p.xPct, yPct:p.yPct, wPct:p.wPct, hPct:p.hPct, dataUrl };
-  fields[currentPage].push(f);
-  renderFieldElement(f, true);
+  if(editingSigField){
+    editingSigField.dataUrl = dataUrl;
+    const div = overlay.querySelector(`[data-id="${editingSigField.id}"]`);
+    if(div){ div.remove(); }
+    renderFieldElement(editingSigField, true);
+  } else {
+    const p = pendingSigPos || {xPct:35, yPct:70, wPct:30, hPct:10};
+    const f = { id:'f'+(fieldIdCounter++), type:'sig', xPct:p.xPct, yPct:p.yPct, wPct:p.wPct, hPct:p.hPct, dataUrl };
+    fields[currentPage].push(f);
+    renderFieldElement(f, true);
+  }
   pendingSigPos = null;
+  editingSigField = null;
   modalBg.style.display = 'none';
   unlockZoom();
   saveState();
@@ -1916,14 +2077,14 @@ document.body.addEventListener('drop', async (e) => {
 
 const HELP_ITEMS = [
   {icon:'docAdd', text:'מעלים PDF או תמונה - אפשר גם רק למזג כמה קבצים לקובץ אחד, בלי למלא כלום'},
-  {icon:'text',   text:(isDesktopPointer ? 'לחיצה ימנית בכל מקום בעמוד פותחת תפריט' : 'לחיצה ארוכה בכל מקום בעמוד פותחת תפריט') + ': טקסט, מספר, תאריך, תמונה, חתימה וישור שורות'},
+  {icon:'text',   text:(isDesktopPointer ? 'לחיצה ימנית בכל מקום בעמוד פותחת תפריט' : 'לחיצה ארוכה בכל מקום בעמוד פותחת תפריט') + ': טקסט, מספר, תאריך, תמונה וחתימה'},
   {icon:'number', text:'מספר - נפתחת מקלדת ספרות עם סמלי מטבע ופיסוק מהירים (₪ $ € % / - וכו\')'},
   {icon:'date',   text:'תאריך - ממולא אוטומטית בתאריך היום, ואפשר גם לבחור תאריך מהיומן'},
   {icon:'sig',    text:'חתימה - חותמים באצבע בתוך החלון'},
   {icon:'move',   text:'נגיעה על שדה בוחרת אותו (מציגה מסגרת), והעיגול שלמעלה-ימין גורר אותו'},
   {icon:'resize', text:'העיגול שלמטה-שמאל משנה את הגודל'},
   {icon:'close',  text:'העיגול שלמעלה-שמאל מוחק את השדה'},
-  {icon:'align',  text:'"ישר" בתפריט מיישר את כל השדות בעמוד לפי שורות ולפי הקו התחתון'},
+  {icon:'align',  text:'כפתור היישור למעלה מיישר את כל השדות בעמוד לפי שורות ולפי הקו התחתון'},
   {icon:'save',   text:'שומרים ומורידים - קובץ אחד שלם, או רק טווח עמודים שבוחרים'},
   {icon:'home',   text:'כפתור הבית - להמשיך, להוסיף קובץ נוסף (מיזוג), או להתחיל קובץ חדש'},
 ];
