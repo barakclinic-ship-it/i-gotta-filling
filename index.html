@@ -383,7 +383,7 @@
   <button class="circle hdr" id="btnNext" title="עמוד הבא"></button>
 </div>
 
-<input type="file" id="mergeFileInput" accept="application/pdf,image/*">
+<input type="file" id="mergeFileInput" accept="application/pdf,image/*,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
 
 <div id="dropzone">
   <svg viewBox="0 0 24 24" width="108" height="108" style="display:block;margin:0 auto 14px;">
@@ -396,7 +396,7 @@
   <div id="freshUploadRow" style="display:flex;flex-direction:column;align-items:center;">
     <p>בחר קובץ PDF או תמונה (JPG/PNG) כדי למלא בו פרטים ולחתום, או גרור אותו לכאן</p>
     <label class="circle xbig" id="btnChoose" for="fileInput" title="בחר קובץ" style="cursor:pointer;"></label>
-    <input type="file" id="fileInput" accept="application/pdf,image/*">
+    <input type="file" id="fileInput" accept="application/pdf,image/*,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
     <p style="font-size:11px;color:var(--muted);margin-top:14px;opacity:.8;">אם הכפתור לא מגיב - כנראה נפתח בתצוגה מקדימה (למשל בתוך ווטסאפ). לוחצים על שיתוף ובוחרים "פתח ב-Safari" או "פתח ב-Chrome"</p>
   </div>
 
@@ -420,7 +420,7 @@
 
   <button class="circle" id="btnHelp" style="margin-top:26px;font-size:20px;font-weight:600;width:50px;height:50px;background:var(--ink);color:#fff;border-color:var(--ink);animation:helpBounce 2.2s ease-in-out infinite;" title="איך זה עובד">?</button>
 
-  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.36<br>© כל הזכויות שמורות ל-Barak Hadad</p>
+  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.47<br>© כל הזכויות שמורות ל-Barak Hadad</p>
 </div>
 
 <div id="workspace">
@@ -699,6 +699,68 @@ document.getElementById('btnAlignTop').onclick = () => {
   showQuickToast('איזה כיף! כעת השורות מיושרות');
 };
 
+function loadScriptOnce(url){
+  if(!window.__loadedScripts) window.__loadedScripts = {};
+  if(window.__loadedScripts[url]) return window.__loadedScripts[url];
+  window.__loadedScripts[url] = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = url;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('נכשלה טעינת ספריית עזר מהאינטרנט'));
+    document.head.appendChild(s);
+  });
+  return window.__loadedScripts[url];
+}
+
+async function docxFileToPdfBytes(file){
+  await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.11.0/mammoth.browser.min.js');
+  await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.convertToHtml({ arrayBuffer });
+
+  const pageWidthPx = 794;   // A4 width at 96dpi
+  const pageHeightPx = 1123; // A4 height at 96dpi
+  const container = document.createElement('div');
+  container.style.cssText = `position:fixed;left:-9999px;top:0;width:${pageWidthPx}px;padding:60px 70px;box-sizing:border-box;background:#ffffff;font-family:Arial,sans-serif;font-size:15px;line-height:1.55;color:#111;`;
+  container.innerHTML = result.value;
+  document.body.appendChild(container);
+
+  const imgs = Array.from(container.querySelectorAll('img'));
+  await Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(res => { img.onload = img.onerror = res; })));
+
+  let fullCanvas;
+  try{
+    fullCanvas = await html2canvas(container, { scale: 2, backgroundColor: '#ffffff', width: pageWidthPx, windowWidth: pageWidthPx });
+  } finally {
+    document.body.removeChild(container);
+  }
+
+  const renderScaleFactor = fullCanvas.width / pageWidthPx; // html2canvas's own internal scale
+  const pageHeightPxScaled = pageHeightPx * renderScaleFactor;
+  const pageCount = Math.max(1, Math.ceil(fullCanvas.height / pageHeightPxScaled));
+
+  const { PDFDocument } = PDFLib;
+  const doc = await PDFDocument.create();
+  const ptW = pageWidthPx * 0.75, ptH = pageHeightPx * 0.75; // css px (96dpi) -> pdf points (72dpi)
+
+  for(let i = 0; i < pageCount; i++){
+    const sliceCanvas = document.createElement('canvas');
+    sliceCanvas.width = fullCanvas.width;
+    sliceCanvas.height = pageHeightPxScaled;
+    const sctx = sliceCanvas.getContext('2d');
+    sctx.fillStyle = '#ffffff';
+    sctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+    sctx.drawImage(fullCanvas, 0, i * pageHeightPxScaled, fullCanvas.width, pageHeightPxScaled, 0, 0, fullCanvas.width, pageHeightPxScaled);
+    const pngBytes = await fetch(sliceCanvas.toDataURL('image/png')).then(r => r.arrayBuffer());
+    const embedded = await doc.embedPng(pngBytes);
+    const page = doc.addPage([ptW, ptH]);
+    page.drawImage(embedded, { x:0, y:0, width: ptW, height: ptH });
+  }
+
+  return await doc.save({ useObjectStreams: false });
+}
+
 function loadImageEl(file){
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -734,6 +796,13 @@ async function imageFileToPdfBytes(file){
 async function loadFileAsPdfBytes(file){
   if(file.type && file.type.startsWith('image/')){
     const u8 = await imageFileToPdfBytes(file); // Uint8Array - turn it into a plain ArrayBuffer
+    return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+  }
+  const isDocx = file.name && /\.docx$/i.test(file.name) ||
+    file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if(isDocx){
+    showQuickToast('ממיר קובץ וורד ל-PDF...', 4000);
+    const u8 = await docxFileToPdfBytes(file);
     return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
   }
   return await file.arrayBuffer();
@@ -837,6 +906,17 @@ mergeFileInput.onchange = async (e) => {
 
 let fitScale = null; // computed once to make the page fit the available width nicely
 let docZoom = 1; // pure visual zoom, applied only via CSS transform - never re-renders
+// the canvas's own pixel buffer can itself already represent part of the zoom (see
+// renderedQualityZoom below), so the wrapper's ACTUAL transform is only the remainder -
+// every screen<->local coordinate conversion must use THIS, never raw docZoom
+function currentTransformScale(){
+  // measured directly from the DOM rather than computed as docZoom/renderedQualityZoom -
+  // this is immune to any subtle mismatch between that formula and what the browser actually
+  // rendered (borders, sub-pixel rounding, etc.), which is what actually matters for coordinates
+  const local = canvasWrap.offsetWidth;
+  if(!local) return docZoom / renderedQualityZoom; // canvas not laid out yet - fall back
+  return canvasWrap.getBoundingClientRect().width / local;
+}
 let naturalCanvasW = 0, naturalCanvasH = 0; // the 1x-zoom size, taken straight from render math - never measured from the DOM
 
 async function renderPage(num){
@@ -866,12 +946,45 @@ async function renderPage(num){
   pageInfo.textContent = `${num} / ${totalPages}`;
   document.getElementById('btnPrev').disabled = num<=1;
   document.getElementById('btnNext').disabled = num>=totalPages;
+  renderedQualityZoom = 1; // fresh render is always at the base fit-scale quality level
   renderFieldsForPage(num);
   applyDocZoom();
 }
 
+let renderedQualityZoom = 1; // what zoom level the canvas's actual pixel buffer currently represents
+let qualityRerenderTimer = null;
+function scheduleQualityRerender(){
+  clearTimeout(qualityRerenderTimer);
+  qualityRerenderTimer = setTimeout(qualityRerender, 350);
+}
+async function qualityRerender(){
+  if(!pdfDoc) return;
+  const dpr = window.devicePixelRatio || 1;
+  // cap the actual pixel buffer size for mobile memory/texture safety - any zoom beyond
+  // this is still handled smoothly via the CSS transform, just without extra crispness
+  const maxDim = 4096;
+  const naturalDim = Math.max(naturalCanvasW, naturalCanvasH) * dpr;
+  const maxZoomForBuffer = Math.max(1, maxDim / naturalDim);
+  const cappedZoom = Math.min(docZoom, maxZoomForBuffer);
+
+  if(Math.abs(cappedZoom - renderedQualityZoom) < 0.05) return; // already about right, skip
+
+  const page = await pdfDoc.getPage(currentPage);
+  const bufferViewport = page.getViewport({scale: fitScale * dpr * cappedZoom});
+  canvas.width = bufferViewport.width;
+  canvas.height = bufferViewport.height;
+  await page.render({canvasContext: ctx, viewport: bufferViewport}).promise;
+  canvas.style.width = (naturalCanvasW * cappedZoom) + 'px';
+  canvas.style.height = (naturalCanvasH * cappedZoom) + 'px';
+  renderedQualityZoom = cappedZoom;
+  applyDocZoom();
+  refreshFieldScale(); // update existing field divs' scale in place - never removes/recreates
+  // them, so this can never disrupt a field being dragged or edited right when this fires
+}
+
 function applyDocZoom(){
-  canvasWrap.style.transform = docZoom === 1 ? '' : `scale(${docZoom})`;
+  const remaining = docZoom / renderedQualityZoom;
+  canvasWrap.style.transform = Math.abs(remaining - 1) < 0.001 ? '' : `scale(${remaining})`;
   if(docZoom !== 1){
     canvasOuter.style.width = (naturalCanvasW * docZoom) + 'px';
     canvasOuter.style.height = (naturalCanvasH * docZoom) + 'px';
@@ -883,14 +996,16 @@ function applyDocZoom(){
 
 document.getElementById('btnZoomIn').onclick = () => {
   canvasWrap.style.transformOrigin = '';
-  docZoom = Math.min(3, docZoom + 0.25);
+  docZoom = Math.min(6, docZoom + 0.25);
   applyDocZoom();
+  scheduleQualityRerender();
   saveState();
 };
 document.getElementById('btnZoomOut').onclick = () => {
   canvasWrap.style.transformOrigin = '';
   docZoom = Math.max(1, docZoom - 0.25);
   applyDocZoom();
+  scheduleQualityRerender();
   saveState();
 };
 
@@ -898,6 +1013,18 @@ function renderFieldsForPage(num){
   overlay.innerHTML = '';
   removeRadialMenu();
   (fields[num] || []).forEach(f => renderFieldElement(f));
+}
+
+function refreshFieldScale(){
+  const scale = renderedQualityZoom;
+  overlay.querySelectorAll('.field.text-field').forEach(div => {
+    if(scale !== 1){
+      div.style.transform = `scale(${scale})`;
+      div.style.transformOrigin = 'top left';
+    } else {
+      div.style.transform = '';
+    }
+  });
 }
 
 function renderFieldElement(f, startSelected, recenter){
@@ -922,6 +1049,14 @@ function renderFieldElement(f, startSelected, recenter){
     div.innerText = f.text || '';
     div.style.color = f.color || '#000000';
     div.style.fontSize = (f.fontSize || 12) + 'px';
+    // text fields are auto-sized by font-size plus FIXED-px padding/border (not percentage-based
+    // like image/sig fields), so when part of the zoom is currently absorbed into the canvas's own
+    // resolution (renderedQualityZoom) rather than the wrapper's CSS transform, this box needs its
+    // own matching scale-up here or it visibly shrinks relative to the page right as that kicks in
+    if(renderedQualityZoom !== 1){
+      div.style.transform = `scale(${renderedQualityZoom})`;
+      div.style.transformOrigin = 'top left';
+    }
     onTap = () => openTextModal(f);
   }
 
@@ -955,7 +1090,9 @@ function renderFieldElement(f, startSelected, recenter){
 }
 
 function measureTextBox(f, div, recenter){
-  const naturalW = canvas.offsetWidth, naturalH = canvas.offsetHeight;
+  const naturalW = naturalCanvasW, naturalH = naturalCanvasH; // div.offsetWidth is a fixed CSS-px
+  // measurement (from its font-size) that never changes with zoom or quality re-renders, so it must
+  // be compared against the equally-fixed 1x page size here - NOT canvas.offsetWidth, which does change
   if(naturalW > 0) f.wPct = (div.offsetWidth / naturalW) * 100;
   if(naturalH > 0) f.hPct = (div.offsetHeight / naturalH) * 100;
   if(recenter){
@@ -1125,14 +1262,19 @@ overlay.addEventListener('pointerdown', (e) => {
 
   pressStart = {x:e.clientX, y:e.clientY};
   const rect = overlay.getBoundingClientRect();
-  const lx = (e.clientX-rect.left) / docZoom, ly = (e.clientY-rect.top) / docZoom;
+  const lx = (e.clientX-rect.left) / currentTransformScale(), ly = (e.clientY-rect.top) / currentTransformScale();
   pressRing = document.createElement('div');
   pressRing.className = 'press-ring';
   pressRing.style.left = lx+'px';
   pressRing.style.top = ly+'px';
   overlay.appendChild(pressRing);
   pressTimer = setTimeout(() => {
-    showRadialMenu(lx, ly);
+    // recompute fresh here rather than reusing lx/ly from press-start - if the page scrolled at
+    // all during the hold (momentum scroll, etc.) those would now point at the wrong content
+    const freshRect = overlay.getBoundingClientRect();
+    const freshLx = (e.clientX-freshRect.left) / currentTransformScale();
+    const freshLy = (e.clientY-freshRect.top) / currentTransformScale();
+    showRadialMenu(freshLx, freshLy);
     cancelPress();
   }, LONG_PRESS_MS);
   try{ overlay.setPointerCapture(e.pointerId); }catch(err){}
@@ -1157,7 +1299,7 @@ overlay.addEventListener('contextmenu', (e) => {
   if(!isDesktopPointer) return;
   deselectAllFields();
   const rect = overlay.getBoundingClientRect();
-  showRadialMenu((e.clientX - rect.left) / docZoom, (e.clientY - rect.top) / docZoom);
+  showRadialMenu((e.clientX - rect.left) / currentTransformScale(), (e.clientY - rect.top) / currentTransformScale());
 });
 
 let pinchStartDist = null, pinchStartZoom = 1, pinchLiveZoom = 1;
@@ -1179,8 +1321,8 @@ overlay.addEventListener('touchstart', (e) => {
     const midX = (t1.clientX + t2.clientX) / 2;
     const midY = (t1.clientY + t2.clientY) / 2;
     const rect = canvasWrap.getBoundingClientRect();
-    pinchAnchorLocalX = (midX - rect.left) / pinchStartZoom;
-    pinchAnchorLocalY = (midY - rect.top) / pinchStartZoom;
+    pinchAnchorLocalX = (midX - rect.left) / currentTransformScale();
+    pinchAnchorLocalY = (midY - rect.top) / currentTransformScale();
     pinchMidX = midX; pinchMidY = midY;
     canvasWrap.style.transformOrigin = `${pinchAnchorLocalX}px ${pinchAnchorLocalY}px`;
   }
@@ -1191,7 +1333,7 @@ overlay.addEventListener('touchmove', (e) => {
     e.preventDefault();
     const [t1, t2] = e.touches;
     const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-    pinchLiveZoom = Math.max(1, Math.min(3, pinchStartZoom * (dist / pinchStartDist)));
+    pinchLiveZoom = Math.max(1, Math.min(6, pinchStartZoom * (dist / pinchStartDist)));
     pinchMidX = (t1.clientX + t2.clientX) / 2;
     pinchMidY = (t1.clientY + t2.clientY) / 2;
 
@@ -1199,7 +1341,7 @@ overlay.addEventListener('touchmove', (e) => {
     // actually landed, then nudge it back under the fingers with a plain translate -
     // this stays entirely local to the element, so it never fights the browser's own
     // touch/scroll handling the way adjusting window.scroll mid-gesture did
-    canvasWrap.style.transform = `scale(${pinchLiveZoom})`;
+    canvasWrap.style.transform = `scale(${pinchLiveZoom / renderedQualityZoom})`;
     if(pinchLiveZoom !== 1){
       canvasOuter.style.width = (naturalCanvasW * pinchLiveZoom) + 'px';
       canvasOuter.style.height = (naturalCanvasH * pinchLiveZoom) + 'px';
@@ -1208,11 +1350,11 @@ overlay.addEventListener('touchmove', (e) => {
       canvasOuter.style.height = '';
     }
     const rect2 = canvasWrap.getBoundingClientRect();
-    const anchorScreenX = rect2.left + pinchAnchorLocalX * pinchLiveZoom;
-    const anchorScreenY = rect2.top + pinchAnchorLocalY * pinchLiveZoom;
+    const anchorScreenX = rect2.left + pinchAnchorLocalX * (pinchLiveZoom / renderedQualityZoom);
+    const anchorScreenY = rect2.top + pinchAnchorLocalY * (pinchLiveZoom / renderedQualityZoom);
     const correctionX = pinchMidX - anchorScreenX;
     const correctionY = pinchMidY - anchorScreenY;
-    canvasWrap.style.transform = `translate(${correctionX}px, ${correctionY}px) scale(${pinchLiveZoom})`;
+    canvasWrap.style.transform = `translate(${correctionX}px, ${correctionY}px) scale(${pinchLiveZoom / renderedQualityZoom})`;
   }
 }, {passive:false});
 
@@ -1223,14 +1365,15 @@ function endPinch(e){
     // commit the live translate into a real scroll position (fingers are already up,
     // so there's no competing native touch gesture left to fight with)
     const rectBefore = canvasWrap.getBoundingClientRect();
-    const anchorScreenXBefore = rectBefore.left + pinchAnchorLocalX * docZoom;
-    const anchorScreenYBefore = rectBefore.top + pinchAnchorLocalY * docZoom;
+    const anchorScreenXBefore = rectBefore.left + pinchAnchorLocalX * (pinchLiveZoom / renderedQualityZoom);
+    const anchorScreenYBefore = rectBefore.top + pinchAnchorLocalY * (pinchLiveZoom / renderedQualityZoom);
     canvasWrap.style.transformOrigin = '';
     applyDocZoom();
     const rectAfter = canvasWrap.getBoundingClientRect();
-    const anchorScreenXAfter = rectAfter.left + pinchAnchorLocalX * docZoom;
-    const anchorScreenYAfter = rectAfter.top + pinchAnchorLocalY * docZoom;
+    const anchorScreenXAfter = rectAfter.left + pinchAnchorLocalX * currentTransformScale();
+    const anchorScreenYAfter = rectAfter.top + pinchAnchorLocalY * currentTransformScale();
     window.scrollBy(anchorScreenXAfter - anchorScreenXBefore, anchorScreenYAfter - anchorScreenYBefore);
+    scheduleQualityRerender();
     saveState();
   }
 }
@@ -1239,19 +1382,20 @@ overlay.addEventListener('touchcancel', endPinch);
 
 /* ---- double-tap / double-click to zoom in (or back out) exactly at that point ---- */
 function zoomToPoint(targetZoom, screenX, screenY){
-  targetZoom = Math.max(1, Math.min(3, targetZoom));
+  targetZoom = Math.max(1, Math.min(6, targetZoom));
   const rect = canvasWrap.getBoundingClientRect();
-  const localX = (screenX - rect.left) / docZoom;
-  const localY = (screenY - rect.top) / docZoom;
+  const localX = (screenX - rect.left) / currentTransformScale();
+  const localY = (screenY - rect.top) / currentTransformScale();
   canvasWrap.style.transformOrigin = targetZoom === 1 ? '' : `${localX}px ${localY}px`;
   docZoom = targetZoom;
   applyDocZoom();
   if(targetZoom !== 1){
     const rect2 = canvasWrap.getBoundingClientRect();
-    const anchorScreenX = rect2.left + localX * targetZoom;
-    const anchorScreenY = rect2.top + localY * targetZoom;
+    const anchorScreenX = rect2.left + localX * currentTransformScale();
+    const anchorScreenY = rect2.top + localY * currentTransformScale();
     window.scrollBy(anchorScreenX - screenX, anchorScreenY - screenY);
   }
+  scheduleQualityRerender();
   saveState();
 }
 
@@ -1304,7 +1448,7 @@ function unlockZoom(){
 
 function showRadialMenu(x, y){
   removeRadialMenu();
-  const naturalW = canvas.offsetWidth;
+  const naturalW = canvas.offsetWidth; // the CURRENT local box width - matches the units x is given in
   const margin = 30;
   x = Math.max(margin, Math.min(x, naturalW - margin));
   const flipDown = y < 120;
@@ -1316,7 +1460,7 @@ function showRadialMenu(x, y){
   menu.style.transformOrigin = '0 0';
   // counteract BOTH our own document zoom and any residual native viewport zoom,
   // so the menu is always a consistent, visible size no matter how zoomed in the document is
-  const invScale = Math.max(0.4, Math.min(2.5, 1/(docZoom * getViewportScale())));
+  const invScale = Math.max(0.15, Math.min(2.5, renderedQualityZoom/(docZoom * getViewportScale())));
   menu.style.transform = `scale(${invScale})`;
 
   const center = document.createElement('div');
@@ -1382,8 +1526,8 @@ function showRadialMenu(x, y){
   center.addEventListener('pointermove', (ev) => {
     if(!dragCenterStart) return;
     ev.stopPropagation();
-    const dxDrag = (ev.clientX - dragCenterStart.x) / docZoom;
-    const dyDrag = (ev.clientY - dragCenterStart.y) / docZoom;
+    const dxDrag = (ev.clientX - dragCenterStart.x) / currentTransformScale();
+    const dyDrag = (ev.clientY - dragCenterStart.y) / currentTransformScale();
     menuX = menuStartX + dxDrag;
     menuY = menuStartY + dyDrag;
     menu.style.left = menuX + 'px';
@@ -1408,7 +1552,7 @@ function showRadialMenu(x, y){
 }
 
 function clickToPct(x, y, wPct, hPct){
-  const naturalW = canvas.offsetWidth, naturalH = canvas.offsetHeight;
+  const naturalW = canvas.offsetWidth, naturalH = canvas.offsetHeight; // current local box - matches x/y's units
   let xPct = (x/naturalW*100) - wPct/2;
   let yPct = (y/naturalH*100) - hPct/2;
   xPct = Math.max(0, Math.min(xPct, 100-wPct));
@@ -1737,6 +1881,7 @@ function openSigModal(existingField){
   lockZoom();
   modalBg.style.display = 'flex';
   editingSigField = existingField || null;
+  if(existingField) pendingSigPos = null; // editing an existing signature must never also create a new one
   selectedSigColor = lastUsedSigColor;
   renderSigColorRow();
   setTimeout(() => {
@@ -2085,7 +2230,7 @@ document.body.addEventListener('drop', async (e) => {
 });
 
 const HELP_ITEMS = [
-  {icon:'docAdd', text:'מעלים PDF או תמונה - אפשר גם רק למזג כמה קבצים לקובץ אחד, בלי למלא כלום'},
+  {icon:'docAdd', text:'מעלים PDF, וורד (docx) או תמונה - אפשר גם רק למזג כמה קבצים לקובץ אחד, בלי למלא כלום'},
   {icon:'text',   text:(isDesktopPointer ? 'לחיצה ימנית בכל מקום בעמוד פותחת תפריט' : 'לחיצה ארוכה בכל מקום בעמוד פותחת תפריט') + ': טקסט, מספר, תאריך, תמונה וחתימה'},
   {icon:'number', text:'מספר - נפתחת מקלדת ספרות עם סמלי מטבע ופיסוק מהירים (₪ $ € % / - וכו\')'},
   {icon:'date',   text:'תאריך - ממולא אוטומטית בתאריך היום, ואפשר גם לבחור תאריך מהיומן'},
