@@ -256,7 +256,10 @@
   #tippexBar .tbtn{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:12px;padding:6px 10px;font:inherit;cursor:pointer;white-space:nowrap;}
   #tippexBar .tbtn.on{background:#fff;color:#181818;}
   #tippexBar .tbtn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;}
-  #tippexSwatch{width:20px;height:20px;border-radius:50%;border:2px solid #fff;background:#fff;flex-shrink:0;}
+  #tpColorInput{width:34px;height:34px;padding:0;border:2px solid #fff;border-radius:50%;background:none;cursor:pointer;flex-shrink:0;overflow:hidden;}
+  #tpColorInput::-webkit-color-swatch-wrapper{padding:0;}
+  #tpColorInput::-webkit-color-swatch{border:none;border-radius:50%;}
+  #overlay.tippex.dropping .cover-field{pointer-events:none;}
   .radial-menu{position:absolute;left:0;top:0;width:0;height:0;z-index:60;}
   .radial-center{position:absolute;left:-9px;top:-9px;width:18px;height:18px;border-radius:50%;background:#d9433f;opacity:1;cursor:move;touch-action:none;z-index:3;box-shadow:0 1px 4px rgba(0,0,0,0.25);}
   .radial-center::before{content:'';position:absolute;left:-10px;top:-10px;width:32px;height:32px;border-radius:50%;}
@@ -412,7 +415,8 @@
 
 <div id="quickToast"></div>
 <div id="tippexBar">
-  <button class="tbtn" id="tpAuto" title="צבע אוטומטי מהרקע"><span id="tippexSwatch"></span><span id="tpAutoLbl">אוטומטי</span></button>
+  <input type="color" id="tpColorInput" value="#ffffff" title="בחר צבע">
+  <button class="tbtn" id="tpAuto" title="צבע אוטומטי מהרקע"><span id="tpAutoLbl">אוטומטי</span></button>
   <button class="tbtn" id="tpDrop" title="טפטפת - בחר צבע מהדף"></button>
   <button class="tbtn" id="tpPan" title="הזזת הדף"></button>
   <button class="tbtn" id="tpDone">סיום</button>
@@ -464,7 +468,7 @@
 
   <button class="circle" id="btnHelp" style="margin-top:26px;font-size:20px;font-weight:600;width:50px;height:50px;background:var(--ink);color:#fff;border-color:var(--ink);animation:helpBounce 2.2s ease-in-out infinite;" title="איך זה עובד">?</button>
 
-  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.54<br>© כל הזכויות שמורות ל-Barak Hadad</p>
+  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.55<br>© כל הזכויות שמורות ל-Barak Hadad</p>
 </div>
 
 <div id="workspace">
@@ -1394,20 +1398,37 @@ overlay.addEventListener('contextmenu', (e) => {
 let tippexOn = false, tippexAuto = true, tippexColor = '#ffffff', tippexDropMode = false, tippexPan = false;
 let tpDraw = null;
 const tippexBar = document.getElementById('tippexBar');
-const tpSwatch = document.getElementById('tippexSwatch');
+const tpColorInput = document.getElementById('tpColorInput');
 setIcon(document.getElementById('tpDrop'), 'dropper');
 setIcon(document.getElementById('tpPan'), 'hand');
 document.getElementById('tpDrop').insertAdjacentHTML('beforeend','<span>טפטפת</span>');
 document.getElementById('tpPan').insertAdjacentHTML('beforeend','<span>הזז</span>');
 
+function tpSelectedCover(){
+  const d = overlay.querySelector('.cover-field.selected');
+  if(!d) return null;
+  const f = (fields[currentPage] || []).find(x => x.id === d.dataset.id);
+  return f ? {f, d} : null;
+}
+function tpApplyColor(c){
+  const sel = tpSelectedCover();
+  if(sel){ sel.f.color = c; sel.d.style.background = c; saveState(); }
+  else { tippexColor = c; tippexAuto = false; }
+  tpColorInput.value = c;
+  tpRefreshBar();
+}
 function tpRefreshBar(){
-  tpSwatch.style.background = tippexAuto ? 'linear-gradient(135deg,#fff 50%,#ddd 50%)' : tippexColor;
-  document.getElementById('tpAutoLbl').textContent = tippexAuto ? 'אוטומטי' : 'ידני';
-  document.getElementById('tpAuto').classList.toggle('on', tippexAuto);
+  const sel = tpSelectedCover();
+  if(sel) tpColorInput.value = sel.f.color;
+  else if(!tippexAuto) tpColorInput.value = tippexColor;
+  document.getElementById('tpAuto').classList.toggle('on', !sel && tippexAuto);
   document.getElementById('tpDrop').classList.toggle('on', tippexDropMode);
   document.getElementById('tpPan').classList.toggle('on', tippexPan);
   overlay.classList.toggle('panning', tippexPan);
+  overlay.classList.toggle('dropping', tippexDropMode);
 }
+tpColorInput.oninput = () => tpApplyColor(tpColorInput.value);
+overlay.addEventListener('pointerup', () => setTimeout(() => { if(tippexOn) tpRefreshBar(); }, 30));
 function setTippex(on){
   tippexOn = on;
   overlay.classList.toggle('tippex', on);
@@ -1415,13 +1436,20 @@ function setTippex(on){
   document.getElementById('btnTippex').classList.toggle('confirm', on);
   document.body.classList.toggle('tp-on', on);
   tippexDropMode = false; tippexPan = false;
-  if(on){ deselectAllFields(); showQuickToast('גרור מלבן על מה שרוצים למחוק. טפטפת לבחירת צבע', 3200); }
+  if(on){ deselectAllFields(); showQuickToast('גרור מלבן על מה שרוצים למחוק. אחר כך אפשר להחליף לו צבע', 3200); }
   tpRefreshBar();
 }
 document.getElementById('btnTippex').onclick = () => setTippex(!tippexOn);
 document.getElementById('tpDone').onclick = () => setTippex(false);
-document.getElementById('tpAuto').onclick = () => { tippexAuto = true; tippexDropMode = false; tpRefreshBar(); };
-document.getElementById('tpDrop').onclick = () => { tippexDropMode = !tippexDropMode; if(tippexDropMode) tippexPan = false; tpRefreshBar(); if(tippexDropMode) showQuickToast('גע בנקודה בדף כדי לדגום את הצבע'); };
+document.getElementById('tpAuto').onclick = () => {
+  tippexDropMode = false;
+  const sel = tpSelectedCover();
+  if(sel){
+    const W = overlay.offsetWidth, H = overlay.offsetHeight;
+    tpApplyColor(sampleBackgroundAround(sel.f.xPct/100*W, sel.f.yPct/100*H, sel.f.wPct/100*W, sel.f.hPct/100*H));
+  } else { tippexAuto = true; tpRefreshBar(); }
+};
+document.getElementById('tpDrop').onclick = () => { tippexDropMode = !tippexDropMode; if(tippexDropMode) tippexPan = false; tpRefreshBar(); if(tippexDropMode) showQuickToast(tpSelectedCover() ? 'גע בנקודה בדף כדי לצבוע בה את המלבן' : 'גע בנקודה בדף כדי לדגום את הצבע'); };
 document.getElementById('tpPan').onclick = () => { tippexPan = !tippexPan; if(tippexPan) tippexDropMode = false; tpRefreshBar(); };
 
 function toHex(r,g,b){ return '#' + [r,g,b].map(v => Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join(''); }
@@ -1488,6 +1516,7 @@ overlay.addEventListener('pointerdown', (e) => {
     tpDraw.pid = e.pointerId; tpDraw.last = p;
     return;
   }
+  deselectAllFields();
   tpDraw = { x0:p.x, y0:p.y, x1:p.x, y1:p.y, pid:e.pointerId };
   tpDraw.el = document.createElement('div'); tpDraw.el.className = 'tippex-rect';
   overlay.appendChild(tpDraw.el);
@@ -1512,10 +1541,8 @@ function tpEnd(e, cancelled){
   d.el.remove();
   if(cancelled) return;
   if(d.drop){
-    tippexColor = samplePixel(d.last.x, d.last.y);
-    tippexAuto = false; tippexDropMode = false;
-    tpRefreshBar();
-    showQuickToast('הצבע נבחר. עכשיו גרור מלבן למחיקה');
+    tippexDropMode = false;
+    tpApplyColor(samplePixel(d.last.x, d.last.y));
     return;
   }
   let l = Math.min(d.x0,d.x1), t = Math.min(d.y0,d.y1);
@@ -1525,8 +1552,10 @@ function tpEnd(e, cancelled){
   const W = overlay.offsetWidth, H = overlay.offsetHeight;
   const f = { id:'f'+(fieldIdCounter++), type:'cover', color, xPct:l/W*100, yPct:t/H*100, wPct:w/W*100, hPct:h/H*100 };
   (fields[currentPage] = fields[currentPage] || []).push(f);
-  renderFieldElement(f, false);
+  deselectAllFields();
+  renderFieldElement(f, true);
   saveState();
+  tpRefreshBar();
 }
 overlay.addEventListener('pointerup', (e) => tpEnd(e, false));
 overlay.addEventListener('pointercancel', (e) => tpEnd(e, true));
