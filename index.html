@@ -242,6 +242,21 @@
   .img-field, .sig-field{padding:0;border-style:solid;min-height:20px;}
   .img-field img, .sig-field img{width:100%;height:100%;display:block;pointer-events:none;object-fit:contain;}
 
+  .cover-field{padding:0;min-width:0;border-radius:0;pointer-events:none;border-style:solid;}
+  #overlay.tippex .cover-field{pointer-events:auto;}
+  #overlay.tippex .field:not(.cover-field){pointer-events:none;opacity:.55;}
+  #overlay.tippex{touch-action:none;cursor:crosshair;}
+  #overlay.tippex.panning{touch-action:pan-x pan-y;cursor:grab;}
+  .tippex-rect{position:absolute;border:1.5px dashed #d9433f;background:rgba(217,67,63,0.12);pointer-events:none;z-index:5;}
+  .tippex-loupe{position:absolute;width:44px;height:44px;border-radius:50%;border:2px solid #181818;box-shadow:0 0 0 2px #fff,0 2px 8px rgba(0,0,0,.3);pointer-events:none;z-index:6;transform:translate(-50%,-130%);}
+  #tippexBar{display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(64px + env(safe-area-inset-bottom));z-index:120;
+    background:rgba(24,24,24,0.94);color:#fff;border-radius:16px;padding:8px 10px;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(0,0,0,.28);font-size:12px;max-width:94vw;}
+  #tippexBar.show{display:flex;}
+  body.tp-on #quickToast{bottom:150px;}
+  #tippexBar .tbtn{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:12px;padding:6px 10px;font:inherit;cursor:pointer;white-space:nowrap;}
+  #tippexBar .tbtn.on{background:#fff;color:#181818;}
+  #tippexBar .tbtn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;}
+  #tippexSwatch{width:20px;height:20px;border-radius:50%;border:2px solid #fff;background:#fff;flex-shrink:0;}
   .radial-menu{position:absolute;left:0;top:0;width:0;height:0;z-index:60;}
   .radial-center{position:absolute;left:-9px;top:-9px;width:18px;height:18px;border-radius:50%;background:#d9433f;opacity:1;cursor:move;touch-action:none;z-index:3;box-shadow:0 1px 4px rgba(0,0,0,0.25);}
   .radial-center::before{content:'';position:absolute;left:-10px;top:-10px;width:32px;height:32px;border-radius:50%;}
@@ -380,6 +395,7 @@
     <button class="circle hdr" id="btnExport" title="שמור והורד"></button>
     <button class="circle hdr" id="btnShare" title="שלח"></button>
     <button class="circle hdr" id="btnAlignTop" title="יישר שורות"></button>
+    <button class="circle hdr" id="btnTippex" title="טיפקס - מחיקה ותיקון"></button>
     <div class="sep" id="zoomSep"></div>
     <button class="circle hdr" id="btnZoomOut" title="הקטן"></button>
     <button class="circle hdr" id="btnZoomIn" title="הגדל"></button>
@@ -395,6 +411,12 @@
 </header>
 
 <div id="quickToast"></div>
+<div id="tippexBar">
+  <button class="tbtn" id="tpAuto" title="צבע אוטומטי מהרקע"><span id="tippexSwatch"></span><span id="tpAutoLbl">אוטומטי</span></button>
+  <button class="tbtn" id="tpDrop" title="טפטפת - בחר צבע מהדף"></button>
+  <button class="tbtn" id="tpPan" title="הזזת הדף"></button>
+  <button class="tbtn" id="tpDone">סיום</button>
+</div>
 
 <div id="pageNavBar">
   <button class="circle hdr" id="btnPrev" title="עמוד קודם"></button>
@@ -442,7 +464,7 @@
 
   <button class="circle" id="btnHelp" style="margin-top:26px;font-size:20px;font-weight:600;width:50px;height:50px;background:var(--ink);color:#fff;border-color:var(--ink);animation:helpBounce 2.2s ease-in-out infinite;" title="איך זה עובד">?</button>
 
-  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.53<br>© כל הזכויות שמורות ל-Barak Hadad</p>
+  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.54<br>© כל הזכויות שמורות ל-Barak Hadad</p>
 </div>
 
 <div id="workspace">
@@ -583,6 +605,9 @@ const ICONS = {
   sig:   '<svg viewBox="0 0 24 24"><path d="M3 17.5c3.5-1 4.7-6 7.5-6s2 5.2 5.5 5.2 3.2-3 4.5-4.2"/></svg>',
   trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7"/><path d="M6.5 7l1 12.5h9L18 7"/></svg>',
   text:  '<svg viewBox="0 0 24 24"><path d="M5 5.5h14M12 5.5v13"/></svg>',
+  tippex:'<svg viewBox="0 0 24 24"><path d="M5 15.5l8.5-8.5 4.5 4.5L9.5 20H6a1 1 0 01-1-1z"/><path d="M13.5 7l2-2a1.6 1.6 0 012.3 0l1.2 1.2a1.6 1.6 0 010 2.3l-2 2"/><path d="M9 20h11"/></svg>',
+  dropper:'<svg viewBox="0 0 24 24"><path d="M14.5 5.5l4 4"/><path d="M16.5 3.5a2 2 0 012.8 0l1.2 1.2a2 2 0 010 2.8l-3 3-4-4z"/><path d="M13.5 8.5L5 17v2h2l8.5-8.5"/></svg>',
+  hand:  '<svg viewBox="0 0 24 24"><path d="M8 12V6a1.5 1.5 0 013 0v5M11 11V4.5a1.5 1.5 0 013 0V11M14 11V6a1.5 1.5 0 013 0v7a6 6 0 01-6 6h-1a5 5 0 01-4-2l-3-4.5a1.5 1.5 0 012.3-1.8L8 14"/></svg>',
   send:  '<svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2.5-7.5L4 12z"/><path d="M11.5 12.5L18 4"/></svg>',
 };
 function setIcon(el, name){ el.innerHTML = ICONS[name]; }
@@ -710,6 +735,7 @@ setIcon(document.getElementById('btnConfirmDownload'), 'save');
 setIcon(document.getElementById('btnCancelDownload'), 'close');
 setIcon(document.getElementById('btnShare'), 'send');
 setIcon(document.getElementById('btnAlignTop'), 'align');
+setIcon(document.getElementById('btnTippex'), 'tippex');
 
 function showQuickToast(message, duration){
   const toast = document.getElementById('quickToast');
@@ -893,6 +919,7 @@ function maybeShowFirstUseToast(){
 }
 
 function showHome(){
+  try{ if(tippexOn) setTippex(false); }catch(err){}
   workspace.style.display = 'none';
   mainToolbar.style.display = 'none';
   pageNavBar.style.display = 'none';
@@ -1074,7 +1101,7 @@ function refreshFieldScale(){
 
 function renderFieldElement(f, startSelected, recenter){
   const div = document.createElement('div');
-  div.className = 'field ' + (f.type === 'sig' ? 'sig-field' : (f.type === 'image' ? 'img-field' : 'text-field'));
+  div.className = 'field ' + (f.type === 'sig' ? 'sig-field' : (f.type === 'image' ? 'img-field' : (f.type === 'cover' ? 'cover-field' : 'text-field')));
   if(startSelected) div.classList.add('selected');
   div.style.left = f.xPct + '%';
   div.style.top = f.yPct + '%';
@@ -1090,6 +1117,8 @@ function renderFieldElement(f, startSelected, recenter){
     img.src = f.dataUrl;
     div.appendChild(img);
     if(f.type === 'sig'){ onTap = () => openSigModal(f); }
+  } else if(f.type === 'cover'){
+    div.style.background = f.color || '#ffffff';
   } else {
     div.innerText = f.text || '';
     div.style.color = f.color || '#000000';
@@ -1140,7 +1169,7 @@ function renderFieldElement(f, startSelected, recenter){
   div.appendChild(dup);
 
   makeDraggable(div, f, resize, onTap);
-  overlay.appendChild(div);
+  if(f.type === 'cover') overlay.insertBefore(div, overlay.firstChild); else overlay.appendChild(div);
 
   if(f.type === 'text'){
     requestAnimationFrame(() => measureTextBox(f, div, recenter));
@@ -1177,8 +1206,8 @@ function verticalOverlap(a, b){
 }
 
 function alignAllFieldsOnPage(){
-  const pageFields = fields[currentPage];
-  if(!pageFields || pageFields.length < 2) return;
+  const pageFields = (fields[currentPage] || []).filter(x => x.type !== 'cover');
+  if(pageFields.length < 2) return;
 
   const rowThresholdPct = 1.2; // fields within this Y-distance count as "the same row" - kept tight so dense rows don't merge into each other
   const used = new Array(pageFields.length).fill(false);
@@ -1264,11 +1293,11 @@ function makeDraggable(div, f, resizeHandle, onTap){
       f.yPct = newTop/parentRect.height*100;
     }
     if(resizing){
-      let newW = Math.max(30, startW + (startX - p.x));
+      let newW = Math.max(f.type === 'cover' ? 6 : 30, startW + (startX - p.x));
       div.style.width = (newW/parentRect.width*100) + '%';
       f.wPct = newW/parentRect.width*100;
       if(f.type !== 'text'){
-        let newH = Math.max(16, startH + (p.y - startY));
+        let newH = Math.max(f.type === 'cover' ? 6 : 16, startH + (p.y - startY));
         div.style.height = (newH/parentRect.height*100) + '%';
         f.hPct = newH/parentRect.height*100;
       } else {
@@ -1359,6 +1388,148 @@ overlay.addEventListener('contextmenu', (e) => {
   const rect = overlay.getBoundingClientRect();
   showRadialMenu((e.clientX - rect.left) / currentTransformScale(), (e.clientY - rect.top) / currentTransformScale());
 });
+
+
+/* ---- Tipp-Ex / correction tool ---- */
+let tippexOn = false, tippexAuto = true, tippexColor = '#ffffff', tippexDropMode = false, tippexPan = false;
+let tpDraw = null;
+const tippexBar = document.getElementById('tippexBar');
+const tpSwatch = document.getElementById('tippexSwatch');
+setIcon(document.getElementById('tpDrop'), 'dropper');
+setIcon(document.getElementById('tpPan'), 'hand');
+document.getElementById('tpDrop').insertAdjacentHTML('beforeend','<span>טפטפת</span>');
+document.getElementById('tpPan').insertAdjacentHTML('beforeend','<span>הזז</span>');
+
+function tpRefreshBar(){
+  tpSwatch.style.background = tippexAuto ? 'linear-gradient(135deg,#fff 50%,#ddd 50%)' : tippexColor;
+  document.getElementById('tpAutoLbl').textContent = tippexAuto ? 'אוטומטי' : 'ידני';
+  document.getElementById('tpAuto').classList.toggle('on', tippexAuto);
+  document.getElementById('tpDrop').classList.toggle('on', tippexDropMode);
+  document.getElementById('tpPan').classList.toggle('on', tippexPan);
+  overlay.classList.toggle('panning', tippexPan);
+}
+function setTippex(on){
+  tippexOn = on;
+  overlay.classList.toggle('tippex', on);
+  tippexBar.classList.toggle('show', on);
+  document.getElementById('btnTippex').classList.toggle('confirm', on);
+  document.body.classList.toggle('tp-on', on);
+  tippexDropMode = false; tippexPan = false;
+  if(on){ deselectAllFields(); showQuickToast('גרור מלבן על מה שרוצים למחוק. טפטפת לבחירת צבע', 3200); }
+  tpRefreshBar();
+}
+document.getElementById('btnTippex').onclick = () => setTippex(!tippexOn);
+document.getElementById('tpDone').onclick = () => setTippex(false);
+document.getElementById('tpAuto').onclick = () => { tippexAuto = true; tippexDropMode = false; tpRefreshBar(); };
+document.getElementById('tpDrop').onclick = () => { tippexDropMode = !tippexDropMode; if(tippexDropMode) tippexPan = false; tpRefreshBar(); if(tippexDropMode) showQuickToast('גע בנקודה בדף כדי לדגום את הצבע'); };
+document.getElementById('tpPan').onclick = () => { tippexPan = !tippexPan; if(tippexPan) tippexDropMode = false; tpRefreshBar(); };
+
+function toHex(r,g,b){ return '#' + [r,g,b].map(v => Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join(''); }
+// overlay-local px (CSS px of the 1x-or-quality box) -> canvas pixel buffer coordinates
+function localToCanvasPx(lx, ly){
+  return { x: lx / overlay.offsetWidth * canvas.width, y: ly / overlay.offsetHeight * canvas.height };
+}
+function samplePixel(lx, ly){
+  const c = localToCanvasPx(lx, ly);
+  const x = Math.max(0, Math.min(canvas.width-1, Math.round(c.x)));
+  const y = Math.max(0, Math.min(canvas.height-1, Math.round(c.y)));
+  const r = 2;
+  const x0 = Math.max(0, x-r), y0 = Math.max(0, y-r);
+  const w = Math.min(canvas.width-x0, r*2+1), h = Math.min(canvas.height-y0, r*2+1);
+  const d = ctx.getImageData(x0, y0, w, h).data;
+  let R=0,G=0,B=0,n=0;
+  for(let i=0;i<d.length;i+=4){ R+=d[i]; G+=d[i+1]; B+=d[i+2]; n++; }
+  return toHex(R/n, G/n, B/n);
+}
+// most common color in a thin ring just outside the rectangle = the paper/background there
+function sampleBackgroundAround(l, t, w, h){
+  const a = localToCanvasPx(l, t), b = localToCanvasPx(l+w, t+h);
+  const pad = 3;
+  const x0 = Math.max(0, Math.floor(a.x)-pad), y0 = Math.max(0, Math.floor(a.y)-pad);
+  const x1 = Math.min(canvas.width, Math.ceil(b.x)+pad), y1 = Math.min(canvas.height, Math.ceil(b.y)+pad);
+  const ww = x1-x0, hh = y1-y0;
+  if(ww <= 0 || hh <= 0) return '#ffffff';
+  const d = ctx.getImageData(x0, y0, ww, hh).data;
+  const counts = new Map();
+  const ix0 = Math.floor(a.x)-x0, iy0 = Math.floor(a.y)-y0, ix1 = Math.ceil(b.x)-x0, iy1 = Math.ceil(b.y)-y0;
+  for(let y=0;y<hh;y++){
+    for(let x=0;x<ww;x++){
+      const inside = x>=ix0 && x<ix1 && y>=iy0 && y<iy1;
+      if(inside) continue;
+      const i = (y*ww+x)*4;
+      const key = ((d[i]>>3)<<10) | ((d[i+1]>>3)<<5) | (d[i+2]>>3);
+      const e = counts.get(key);
+      if(e){ e.n++; e.r+=d[i]; e.g+=d[i+1]; e.b+=d[i+2]; } else counts.set(key,{n:1,r:d[i],g:d[i+1],b:d[i+2]});
+    }
+  }
+  let best = null;
+  counts.forEach(e => { if(!best || e.n > best.n) best = e; });
+  if(!best) return '#ffffff';
+  return toHex(best.r/best.n, best.g/best.n, best.b/best.n);
+}
+
+function tpLocal(e){
+  const rect = overlay.getBoundingClientRect();
+  const s = currentTransformScale();
+  return { x: (e.clientX-rect.left)/s, y: (e.clientY-rect.top)/s };
+}
+overlay.addEventListener('pointerdown', (e) => {
+  if(!tippexOn || tippexPan || e.target !== overlay) return;
+  if(activePointers.size > 1) return;
+  e.stopImmediatePropagation();
+  const p = tpLocal(e);
+  try{ overlay.setPointerCapture(e.pointerId); }catch(err){}
+  if(tippexDropMode){
+    tpDraw = { drop:true, el:null };
+    tpDraw.el = document.createElement('div'); tpDraw.el.className = 'tippex-loupe';
+    overlay.appendChild(tpDraw.el);
+    tpDraw.el.style.left = p.x+'px'; tpDraw.el.style.top = p.y+'px';
+    tpDraw.el.style.background = samplePixel(p.x, p.y);
+    tpDraw.pid = e.pointerId; tpDraw.last = p;
+    return;
+  }
+  tpDraw = { x0:p.x, y0:p.y, x1:p.x, y1:p.y, pid:e.pointerId };
+  tpDraw.el = document.createElement('div'); tpDraw.el.className = 'tippex-rect';
+  overlay.appendChild(tpDraw.el);
+}, true);
+overlay.addEventListener('pointermove', (e) => {
+  if(!tpDraw || e.pointerId !== tpDraw.pid) return;
+  const p = tpLocal(e);
+  if(tpDraw.drop){
+    tpDraw.last = p;
+    tpDraw.el.style.left = p.x+'px'; tpDraw.el.style.top = p.y+'px';
+    tpDraw.el.style.background = samplePixel(p.x, p.y);
+    return;
+  }
+  tpDraw.x1 = p.x; tpDraw.y1 = p.y;
+  const l = Math.min(tpDraw.x0,tpDraw.x1), t = Math.min(tpDraw.y0,tpDraw.y1);
+  tpDraw.el.style.left = l+'px'; tpDraw.el.style.top = t+'px';
+  tpDraw.el.style.width = Math.abs(tpDraw.x1-tpDraw.x0)+'px'; tpDraw.el.style.height = Math.abs(tpDraw.y1-tpDraw.y0)+'px';
+});
+function tpEnd(e, cancelled){
+  if(!tpDraw || e.pointerId !== tpDraw.pid) return;
+  const d = tpDraw; tpDraw = null;
+  d.el.remove();
+  if(cancelled) return;
+  if(d.drop){
+    tippexColor = samplePixel(d.last.x, d.last.y);
+    tippexAuto = false; tippexDropMode = false;
+    tpRefreshBar();
+    showQuickToast('הצבע נבחר. עכשיו גרור מלבן למחיקה');
+    return;
+  }
+  let l = Math.min(d.x0,d.x1), t = Math.min(d.y0,d.y1);
+  let w = Math.abs(d.x1-d.x0), h = Math.abs(d.y1-d.y0);
+  if(w < 6 || h < 6) return;
+  const color = tippexAuto ? sampleBackgroundAround(l, t, w, h) : tippexColor;
+  const W = overlay.offsetWidth, H = overlay.offsetHeight;
+  const f = { id:'f'+(fieldIdCounter++), type:'cover', color, xPct:l/W*100, yPct:t/H*100, wPct:w/W*100, hPct:h/H*100 };
+  (fields[currentPage] = fields[currentPage] || []).push(f);
+  renderFieldElement(f, false);
+  saveState();
+}
+overlay.addEventListener('pointerup', (e) => tpEnd(e, false));
+overlay.addEventListener('pointercancel', (e) => tpEnd(e, true));
 
 let pinchStartDist = null, pinchStartZoom = 1, pinchLiveZoom = 1;
 let pinchAnchorLocalX = 0, pinchAnchorLocalY = 0;
@@ -2138,13 +2309,20 @@ async function buildFilledPdf(range){
     if(!page) continue;
     const { width, height } = page.getSize();
 
-    for(const f of pageFields){
+    const ordered = pageFields.filter(q => q.type === 'cover').concat(pageFields.filter(q => q.type !== 'cover'));
+    for(const f of ordered){
       const x = (f.xPct/100) * width;
       const boxW = (f.wPct/100) * width;
       const boxH = ((f.hPct||6)/100) * height;
       const yTop = (f.yPct/100) * height;
       const yPdf = height - yTop - boxH;
 
+      if(f.type === 'cover'){
+        const c = (f.color || '#ffffff').replace('#','');
+        const r = parseInt(c.substr(0,2),16)/255, g = parseInt(c.substr(2,2),16)/255, b = parseInt(c.substr(4,2),16)/255;
+        page.drawRectangle({ x, y: yPdf, width: boxW, height: boxH, color: PDFLib.rgb(r,g,b), borderWidth: 0 });
+        continue;
+      }
       if(f.type === 'text'){
         if(!f.text) continue;
         const fontSizePt = (f.fontSize || 12) / renderScale;
