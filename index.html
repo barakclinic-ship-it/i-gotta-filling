@@ -233,10 +233,13 @@
     white-space:pre-wrap;word-break:break-word;overflow:visible;
     width:fit-content;max-width:85%;min-width:16px;
   }
-  .field .del{position:absolute;top:-7px;left:-7px;display:none;}
-  .field .resize{position:absolute;bottom:-7px;left:-7px;display:none;}
-  .field .drag-handle{position:absolute;top:-7px;right:-7px;display:none;cursor:move;}
-  .field .duplicate{position:absolute;bottom:-7px;right:-7px;display:none;}
+  .field .circle.small{width:18px;height:18px;}
+  .field .circle.small svg{width:11px;height:11px;}
+  .field .circle.small::after{content:'';position:absolute;inset:-8px;border-radius:50%;}
+  .field .del{position:absolute;top:-9px;left:-9px;display:none;}
+  .field .resize{position:absolute;bottom:-9px;left:-9px;display:none;}
+  .field .drag-handle{position:absolute;top:-9px;right:-9px;display:none;cursor:move;}
+  .field .duplicate{position:absolute;bottom:-9px;right:-9px;display:none;}
   .field.selected .del, .field.selected .resize, .field.selected .drag-handle, .field.selected .duplicate{display:flex;}
 
   .img-field, .sig-field{padding:0;border-style:solid;min-height:20px;}
@@ -245,7 +248,7 @@
   .cover-field{padding:0;min-width:0;border-radius:0;border-style:solid;}
   .cover-field.selected{border:2px solid #34c759;box-shadow:0 0 12px rgba(52,199,89,.75);animation:coverGlow 1.6s ease-in-out infinite;}
   @keyframes coverGlow{0%,100%{box-shadow:0 0 6px rgba(52,199,89,.55);}50%{box-shadow:0 0 14px rgba(52,199,89,.95);}}
-  .field .dropper{position:absolute;top:-7px;left:50%;margin-left:-6.5px;display:none;}
+  .field .dropper{position:absolute;top:-9px;left:50%;margin-left:-9px;display:none;}
   .field.selected .dropper{display:flex;}
   #overlay.dropping .field{pointer-events:none;}
   #overlay.dropping{cursor:crosshair;touch-action:none;}
@@ -452,7 +455,7 @@
 
   <button class="circle" id="btnHelp" style="margin-top:26px;font-size:20px;font-weight:600;width:50px;height:50px;background:var(--ink);color:#fff;border-color:var(--ink);animation:helpBounce 2.2s ease-in-out infinite;" title="איך זה עובד">?</button>
 
-  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.56<br>© כל הזכויות שמורות ל-Barak Hadad</p>
+  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.57<br>© כל הזכויות שמורות ל-Barak Hadad</p>
 </div>
 
 <div id="workspace">
@@ -1230,7 +1233,7 @@ function alignAllFieldsOnPage(){
 
 function makeDraggable(div, f, resizeHandle, onTap){
   let dragging = false, resizing = false, moved = false, selectingTap = false;
-  let startX, startY, startLeft, startTop, startW, startH, parentRect;
+  let startX, startY, startLeft, startTop, startW, startH, parentRect, startXPct, startWPct;
 
   function pos(e){ const t = e.touches ? e.touches[0] : e; return {x:t.clientX, y:t.clientY}; }
 
@@ -1274,6 +1277,7 @@ function makeDraggable(div, f, resizeHandle, onTap){
     parentRect = overlay.getBoundingClientRect();
     startW = div.offsetWidth;
     startH = div.offsetHeight;
+    startXPct = f.xPct; startWPct = f.wPct;
     try{ resizeHandle.setPointerCapture(e.pointerId); }catch(err){}
     e.stopPropagation();
     e.preventDefault();
@@ -1300,16 +1304,22 @@ function makeDraggable(div, f, resizeHandle, onTap){
       f.yPct = newTop/parentRect.height*100;
     }
     if(resizing){
-      let newW = Math.max(f.type === 'cover' ? 6 : 30, startW + (startX - p.x));
-      div.style.width = (newW/parentRect.width*100) + '%';
-      f.wPct = newW/parentRect.width*100;
+      // handle sits at the bottom-LEFT: dragging it left grows the box leftwards (right edge stays put),
+      // dragging it right shrinks it. Deltas are converted to local units so it also holds under zoom.
+      const sc = currentTransformScale() || 1;
+      const OW = overlay.offsetWidth, OH = overlay.offsetHeight;
+      const newW = Math.max(f.type === 'cover' ? 6 : 30, startW + (startX - p.x)/sc);
+      div.style.width = (newW/OW*100) + '%';
+      f.wPct = newW/OW*100;
       if(f.type !== 'text'){
-        let newH = Math.max(f.type === 'cover' ? 6 : 16, startH + (p.y - startY));
-        div.style.height = (newH/parentRect.height*100) + '%';
-        f.hPct = newH/parentRect.height*100;
+        const newH = Math.max(f.type === 'cover' ? 6 : 16, startH + (p.y - startY)/sc);
+        div.style.height = (newH/OH*100) + '%';
+        f.hPct = newH/OH*100;
       } else {
         measureTextBox(f, div);
       }
+      f.xPct = Math.max(0, startXPct + startWPct - f.wPct);
+      div.style.left = f.xPct + '%';
     }
   });
 
@@ -1462,7 +1472,7 @@ overlay.addEventListener('pointercancel', (e) => tpUp(e, true));
 document.getElementById('btnTippex').onclick = () => {
   if(dropTarget) endDropper();
   const W = overlay.offsetWidth, H = overlay.offsetHeight;
-  const wPct = 38, hPct = 3.6;
+  const wPct = 14, hPct = 14 * W / H; // a square: equal sides in pixels
   // center of what's currently visible on screen, converted to page percentages
   const rect = overlay.getBoundingClientRect(), sc = currentTransformScale();
   const vx = (window.innerWidth/2 - rect.left) / sc, vy = (window.innerHeight/2 - rect.top) / sc;
