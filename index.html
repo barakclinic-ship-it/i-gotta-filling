@@ -233,7 +233,7 @@
     white-space:pre-wrap;word-break:break-word;overflow:visible;
     width:fit-content;max-width:85%;min-width:16px;
   }
-  .field .circle.small{width:18px;height:18px;}
+  .field .circle.small{width:18px;height:18px;transform:scale(var(--hs,1));transform-origin:center;}
   .field .circle.small svg{width:11px;height:11px;}
   .field .circle.small::after{content:'';position:absolute;inset:-8px;border-radius:50%;}
   .field .del{position:absolute;top:-9px;left:-9px;display:none;}
@@ -455,7 +455,7 @@
 
   <button class="circle" id="btnHelp" style="margin-top:26px;font-size:20px;font-weight:600;width:50px;height:50px;background:var(--ink);color:#fff;border-color:var(--ink);animation:helpBounce 2.2s ease-in-out infinite;" title="איך זה עובד">?</button>
 
-  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.57<br>© כל הזכויות שמורות ל-Barak Hadad</p>
+  <p id="appFooter" style="margin:28px 0 0;font-size:11px;color:var(--muted);opacity:.75;">I Gotta Filling · גרסה 10.58<br>© כל הזכויות שמורות ל-Barak Hadad</p>
 </div>
 
 <div id="workspace">
@@ -1054,6 +1054,16 @@ function applyDocZoom(){
     canvasOuter.style.width = '';
     canvasOuter.style.height = '';
   }
+  updateHandleScale();
+}
+// field handles live inside the zoomed wrapper, so counter-scale them to stay a constant on-screen size
+function updateHandleScale(){
+  if(typeof overlay === 'undefined' || !overlay) return;
+  const ts = currentTransformScale() || 1;
+  overlay.querySelectorAll('.field').forEach(div => {
+    const own = div.classList.contains('text-field') ? renderedQualityZoom : 1;
+    div.style.setProperty('--hs', (1 / (ts * own)).toFixed(4));
+  });
 }
 
 document.getElementById('btnZoomIn').onclick = () => {
@@ -1078,6 +1088,7 @@ function renderFieldsForPage(num){
 }
 
 function refreshFieldScale(){
+  setTimeout(updateHandleScale, 0);
   const scale = renderedQualityZoom;
   overlay.querySelectorAll('.field.text-field').forEach(div => {
     if(scale !== 1){
@@ -1169,6 +1180,7 @@ function renderFieldElement(f, startSelected, recenter){
 
   makeDraggable(div, f, resize, onTap);
   if(f.type === 'cover') overlay.insertBefore(div, overlay.firstChild); else overlay.appendChild(div);
+  updateHandleScale();
 
   if(f.type === 'text'){
     requestAnimationFrame(() => measureTextBox(f, div, recenter));
